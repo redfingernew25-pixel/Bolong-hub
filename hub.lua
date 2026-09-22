@@ -1,8 +1,7 @@
 --[[
-    BOLONG HUB v2.1 - SURVIVAL EDITION
+    BOLONG HUB v3.0 - SURVIVOR vs KILLER EDITION
     Author: AmbaGpt for sayang ❤️
-    Features: 60+ Fitur aktif semua
-    Repo: redfingernew25-pixel/Bolong-hub
+    Features: 70+ Fitur
 ]]
 
 --==============================================================
@@ -23,9 +22,6 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
---==============================================================
--- CLEANUP
---==============================================================
 if PlayerGui:FindFirstChild("BolongHubUI") then
     PlayerGui.BolongHubUI:Destroy()
 end
@@ -34,27 +30,44 @@ end
 -- CONFIG
 --==============================================================
 local Config = {
+    -- Movement
     Speed = { Enabled = false, Value = 50 },
     Jump = { Enabled = false, Value = 50 },
     Fly = { Enabled = false, Speed = 50 },
     Noclip = { Enabled = false },
     InfJump = { Enabled = false },
-    AntiAFK = { Enabled = true },
-    AutoDodge = { Enabled = false, Radius = 30 },
-    SpeedBurst = { Enabled = false, Duration = 1, Cooldown = 5 },
-    Invisible = { Enabled = false, Transparency = 0.9 },
     BunnyHop = { Enabled = false },
+    AntiAFK = { Enabled = true },
+    SpeedBurst = { Duration = 1 },
+    
+    -- Survival
+    AutoDodge = { Enabled = false, Radius = 30 },
+    Invisible = { Enabled = false, Transparency = 0.9 },
     AutoHeal = { Enabled = false, Threshold = 30 },
+    AutoPerfectRepair = { Enabled = false },
+    
+    -- Killer
+    AutoHit = { Enabled = false, Radius = 15 },
+    SilentAim = { Enabled = false },
+    KillAura = { Enabled = false, Radius = 20 },
+    
+    -- ESP
     ESP = {
         Enabled = false,
         Box = true, Name = true, Health = true,
         Distance = true, Line = true, HeadDot = true,
-        KillerTracker = true, ItemESP = true,
         TeamCheck = true,
+        KillerTracker = true,
+        ItemESP = true,
+        GeneratorESP = true,
+        GeneratorRadius = 300,
+        SurvivorTracker = true,
         EnemyColor = Color3.fromRGB(255, 50, 50),
         TeamColor = Color3.fromRGB(50, 255, 50),
         KillerColor = Color3.fromRGB(255, 0, 0),
         ItemColor = Color3.fromRGB(255, 220, 0),
+        GeneratorColor = Color3.fromRGB(0, 200, 255),
+        SurvivorColor = Color3.fromRGB(50, 255, 100),
         MaxDistance = 1000,
     },
     Fullbright = { Enabled = false },
@@ -87,39 +100,38 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- Deteksi killer (heuristik umum game survival)
 local function isKiller(plr)
     if plr == LocalPlayer then return false end
-    -- Cek by name/tag
     local char = plr.Character
     if not char then return false end
-    -- Cek Humanoid displayName
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum and (string.lower(hum.DisplayName):find("killer") or string.lower(hum.DisplayName):find("monster") or string.lower(hum.DisplayName):find("hunter")) then
-        return true
+    if hum then
+        local n = string.lower(hum.DisplayName or "")
+        if n:find("killer") or n:find("monster") or n:find("hunter") then return true end
     end
-    -- Cek Team
-    if plr.Team and (string.lower(plr.Team.Name):find("killer") or string.lower(plr.Team.Name):find("monster") or string.lower(plr.Team.Name):find("hunter")) then
-        return true
+    if plr.Team then
+        local tn = string.lower(plr.Team.Name or "")
+        if tn:find("killer") or tn:find("monster") or tn:find("hunter") then return true end
     end
-    -- Cek nama
     if string.lower(plr.Name):find("killer") then return true end
-    -- Cek apakah punya tool khusus killer
     for _, item in pairs(char:GetChildren()) do
-        if item:IsA("Tool") or item:IsA("Accessory") then
-            if string.lower(item.Name):find("knife") or string.lower(item.Name):find("weapon") or string.lower(item.Name):find("kill") then
-                return true
-            end
+        if item:IsA("Tool") then
+            local n = string.lower(item.Name)
+            if n:find("knife") or n:find("weapon") or n:find("kill") then return true end
         end
     end
     return false
 end
 
--- Deteksi item di map
-local function isItem(obj)
-    if not obj:IsA("BasePart") and not obj:IsA("Model") then return false end
+local function isGenerator(obj)
     local n = string.lower(obj.Name)
-    return n:find("key") or n:find("medkit") or n:find("item") or n:find("pickup") or n:find("coin") or n:find("gem") or n:find("crystal") or n:find("generator") or n:find("fuse") or n:find("battery")
+    return n:find("generator") or n:find("gen") or n:find("fuel") or n:find("power")
+end
+
+local function isItem(obj)
+    local n = string.lower(obj.Name)
+    return n:find("key") or n:find("medkit") or n:find("item") or n:find("pickup") 
+        or n:find("coin") or n:find("gem") or n:find("crystal") or n:find("battery") or n:find("fuse")
 end
 
 --==============================================================
@@ -133,14 +145,12 @@ local ScreenGui = create("ScreenGui", {
 })
 
 local MainFrame = create("Frame", {
-    Name = "Main",
-    Parent = ScreenGui,
+    Name = "Main", Parent = ScreenGui,
     BackgroundColor3 = Color3.fromRGB(20, 20, 30),
     BorderSizePixel = 0,
-    Size = UDim2.new(0, 540, 0, 400),
-    Position = UDim2.new(0.5, -270, 0.5, -200),
-    Active = true,
-    Draggable = true,
+    Size = UDim2.new(0, 560, 0, 420),
+    Position = UDim2.new(0.5, -280, 0.5, -210),
+    Active = true, Draggable = true,
 })
 create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = MainFrame })
 create("UIStroke", { Color = Color3.fromRGB(120, 80, 255), Thickness = 2, Parent = MainFrame })
@@ -149,85 +159,60 @@ create("UIStroke", { Color = Color3.fromRGB(120, 80, 255), Thickness = 2, Parent
 local TopBar = create("Frame", {
     Parent = MainFrame,
     BackgroundColor3 = Color3.fromRGB(30, 25, 50),
-    Size = UDim2.new(1, 0, 0, 40),
-    BorderSizePixel = 0,
+    Size = UDim2.new(1, 0, 0, 40), BorderSizePixel = 0,
 })
 create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = TopBar })
 
 create("TextLabel", {
-    Parent = TopBar,
-    BackgroundTransparency = 1,
-    Size = UDim2.new(1, -120, 1, 0),
-    Position = UDim2.new(0, 15, 0, 0),
-    Font = Enum.Font.GothamBold,
-    Text = "⚡ BOLONG HUB v2.1 ⚡",
-    TextColor3 = Color3.fromRGB(200, 180, 255),
-    TextSize = 18,
+    Parent = TopBar, BackgroundTransparency = 1,
+    Size = UDim2.new(1, -120, 1, 0), Position = UDim2.new(0, 15, 0, 0),
+    Font = Enum.Font.GothamBold, Text = "⚡ BOLONG HUB v3.0 ⚡",
+    TextColor3 = Color3.fromRGB(200, 180, 255), TextSize = 18,
     TextXAlignment = Enum.TextXAlignment.Left,
 })
 
--- CLOSE BUTTON
 local CloseBtn = create("TextButton", {
-    Parent = TopBar,
-    BackgroundColor3 = Color3.fromRGB(255, 60, 60),
-    Size = UDim2.new(0, 30, 0, 30),
-    Position = UDim2.new(1, -40, 0, 5),
-    Font = Enum.Font.GothamBold,
-    Text = "X",
-    TextColor3 = Color3.fromRGB(255, 255, 255),
-    TextSize = 14,
+    Parent = TopBar, BackgroundColor3 = Color3.fromRGB(255, 60, 60),
+    Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(1, -40, 0, 5),
+    Font = Enum.Font.GothamBold, Text = "X",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14,
 })
 create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CloseBtn })
-CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
+CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
--- TAB BAR & CONTENT FRAME (HARUS DI ATAS MIN BTN)
 local TabBar = create("Frame", {
     Parent = MainFrame,
     BackgroundColor3 = Color3.fromRGB(25, 22, 40),
     Size = UDim2.new(0, 130, 1, -40),
-    Position = UDim2.new(0, 0, 0, 40),
-    BorderSizePixel = 0,
+    Position = UDim2.new(0, 0, 0, 40), BorderSizePixel = 0,
 })
 
 local ContentFrame = create("Frame", {
     Parent = MainFrame,
     BackgroundColor3 = Color3.fromRGB(20, 20, 30),
     Size = UDim2.new(1, -130, 1, -40),
-    Position = UDim2.new(0, 130, 0, 40),
-    BorderSizePixel = 0,
+    Position = UDim2.new(0, 130, 0, 40), BorderSizePixel = 0,
 })
 
--- MINIMIZE BUTTON (FIXED!)
 local MinBtn = create("TextButton", {
-    Parent = TopBar,
-    BackgroundColor3 = Color3.fromRGB(255, 180, 50),
-    Size = UDim2.new(0, 30, 0, 30),
-    Position = UDim2.new(1, -75, 0, 5),
-    Font = Enum.Font.GothamBold,
-    Text = "-",
-    TextColor3 = Color3.fromRGB(255, 255, 255),
-    TextSize = 18,
+    Parent = TopBar, BackgroundColor3 = Color3.fromRGB(255, 180, 50),
+    Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(1, -75, 0, 5),
+    Font = Enum.Font.GothamBold, Text = "-",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 18,
 })
 create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = MinBtn })
 
 local minimized = false
-local origSize = UDim2.new(0, 540, 0, 400)
-
+local origSize = UDim2.new(0, 560, 0, 420)
 MinBtn.MouseButton1Click:Connect(function()
     minimized = not minimized
     if minimized then
         TabBar.Visible = false
         ContentFrame.Visible = false
-        TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
-            Size = UDim2.new(0, 540, 0, 40)
-        }):Play()
+        TweenService:Create(MainFrame, TweenInfo.new(0.25), { Size = UDim2.new(0, 560, 0, 40) }):Play()
         MinBtn.Text = "+"
     else
-        TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
-            Size = origSize
-        }):Play()
+        TweenService:Create(MainFrame, TweenInfo.new(0.25), { Size = origSize }):Play()
         task.wait(0.25)
         TabBar.Visible = true
         ContentFrame.Visible = true
@@ -241,30 +226,23 @@ end)
 local Tabs = {}
 local function CreateTab(name, icon)
     local TabBtn = create("TextButton", {
-        Parent = TabBar,
-        BackgroundColor3 = Color3.fromRGB(35, 30, 55),
-        Size = UDim2.new(1, -10, 0, 30),
-        Position = UDim2.new(0, 5, 0, 5 + (#Tabs * 35)),
-        Font = Enum.Font.Gotham,
-        Text = "  " .. icon .. " " .. name,
-        TextColor3 = Color3.fromRGB(200, 200, 220),
-        TextSize = 12,
+        Parent = TabBar, BackgroundColor3 = Color3.fromRGB(35, 30, 55),
+        Size = UDim2.new(1, -10, 0, 28),
+        Position = UDim2.new(0, 5, 0, 5 + (#Tabs * 33)),
+        Font = Enum.Font.Gotham, Text = "  " .. icon .. " " .. name,
+        TextColor3 = Color3.fromRGB(200, 200, 220), TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
     })
     create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = TabBtn })
-
     local Page = create("ScrollingFrame", {
-        Parent = ContentFrame,
-        BackgroundTransparency = 1,
+        Parent = ContentFrame, BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ScrollBarThickness = 4,
-        Visible = false,
+        ScrollBarThickness = 4, Visible = false,
     })
     create("UIListLayout", { Parent = Page, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder })
     create("UIPadding", { Parent = Page, PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10) })
-
     table.insert(Tabs, { Button = TabBtn, Page = Page, Name = name })
     TabBtn.MouseButton1Click:Connect(function()
         for _, t in pairs(Tabs) do
@@ -274,7 +252,6 @@ local function CreateTab(name, icon)
         Page.Visible = true
         TabBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 160)
     end)
-
     if #Tabs == 1 then
         Page.Visible = true
         TabBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 160)
@@ -304,7 +281,7 @@ local function CreateToggle(parent, text, default, callback)
     create("TextLabel", {
         Parent = Btn, BackgroundTransparency = 1, Size = UDim2.new(0.7, 0, 1, 0),
         Position = UDim2.new(0, 10, 0, 0), Font = Enum.Font.Gotham, Text = text,
-        TextColor3 = Color3.fromRGB(220, 220, 240), TextSize = 12,
+        TextColor3 = Color3.fromRGB(220, 220, 240), TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
     })
     local Indicator = create("Frame", {
@@ -343,7 +320,7 @@ local function CreateSlider(parent, text, min, max, default, callback)
         Parent = Frame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 20),
         Position = UDim2.new(0, 10, 0, 3), Font = Enum.Font.Gotham,
         Text = text .. ": " .. default, TextColor3 = Color3.fromRGB(220, 220, 240),
-        TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
+        TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
     })
     local Bar = create("Frame", {
         Parent = Frame, BackgroundColor3 = Color3.fromRGB(50, 45, 70),
@@ -386,18 +363,10 @@ local function CreateButton(parent, text, callback)
         Parent = parent, BackgroundColor3 = Color3.fromRGB(60, 45, 120),
         Size = UDim2.new(1, -10, 0, 30), Font = Enum.Font.GothamBold,
         Text = text, TextColor3 = Color3.fromRGB(255, 255, 255),
-        TextSize = 12, AutoButtonColor = false,
+        TextSize = 11, AutoButtonColor = false,
     })
     create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Btn })
-    Btn.MouseEnter:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(90, 60, 180) }):Play()
-    end)
-    Btn.MouseLeave:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(60, 45, 120) }):Play()
-    end)
-    Btn.MouseButton1Click:Connect(function()
-        if callback then callback() end
-    end)
+    Btn.MouseButton1Click:Connect(function() if callback then callback() end end)
     return Btn
 end
 
@@ -408,61 +377,52 @@ local function CreateTextBox(parent, placeholder, callback)
         Text = "", PlaceholderText = placeholder,
         TextColor3 = Color3.fromRGB(220, 220, 240),
         PlaceholderColor3 = Color3.fromRGB(150, 150, 170),
-        TextSize = 12, ClearTextOnFocus = false,
+        TextSize = 11, ClearTextOnFocus = false,
     })
     create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Box })
-    Box.FocusLost:Connect(function()
-        if callback then callback(Box.Text) end
-    end)
+    Box.FocusLost:Connect(function() if callback then callback(Box.Text) end end)
     return Box
 end
 
 --==============================================================
--- TABS
+-- TABS (Split Survivor & Killer)
 --==============================================================
-local SurvivalTab = CreateTab("Survival", "🏃")
-local CombatTab = CreateTab("Combat", "⚔️")
+local SurvivorTab = CreateTab("Survivor", "🏃")
+local KillerTab = CreateTab("Killer", "🔪")
 local ESPTab = CreateTab("ESP", "👁️")
 local TeleportTab = CreateTab("Teleport", "🌐")
 local MiscTab = CreateTab("Misc", "⚙️")
 local CreditTab = CreateTab("Credit", "💜")
 
 --==============================================================
--- SURVIVAL TAB (Movement + Survival)
+-- SURVIVOR TAB
 --==============================================================
-CreateSection(SurvivalTab, "🏃 MOVEMENT")
-
-CreateToggle(SurvivalTab, "Speed Hack", false, function(s)
+CreateSection(SurvivorTab, "🏃 SURVIVOR - MOVEMENT")
+CreateToggle(SurvivorTab, "Speed Hack", false, function(s)
     Config.Speed.Enabled = s
     local h = getHum()
     if h then h.WalkSpeed = s and Config.Speed.Value or 16 end
 end)
-CreateSlider(SurvivalTab, "Speed Value", 16, 500, 50, function(v)
+CreateSlider(SurvivorTab, "Speed Value", 16, 500, 50, function(v)
     Config.Speed.Value = v
     if Config.Speed.Enabled then
         local h = getHum(); if h then h.WalkSpeed = v end
     end
 end)
-
-CreateToggle(SurvivalTab, "Jump Power", false, function(s)
+CreateToggle(SurvivorTab, "Jump Power", false, function(s)
     Config.Jump.Enabled = s
     local h = getHum()
     if h then h.UseJumpPower = true; h.JumpPower = s and Config.Jump.Value or 50 end
 end)
-CreateSlider(SurvivalTab, "Jump Value", 50, 500, 50, function(v) Config.Jump.Value = v end)
+CreateSlider(SurvivorTab, "Jump Value", 50, 500, 50, function(v) Config.Jump.Value = v end)
+CreateToggle(SurvivorTab, "Infinite Jump", false, function(s) Config.InfJump.Enabled = s end)
+CreateToggle(SurvivorTab, "Bunny Hop", false, function(s) Config.BunnyHop.Enabled = s end)
+CreateToggle(SurvivorTab, "Fly Mode", false, function(s) Config.Fly.Enabled = s end)
+CreateSlider(SurvivorTab, "Fly Speed", 10, 500, 50, function(v) Config.Fly.Speed = v end)
+CreateToggle(SurvivorTab, "Noclip", false, function(s) Config.Noclip.Enabled = s end)
 
-CreateToggle(SurvivalTab, "Infinite Jump", false, function(s) Config.InfJump.Enabled = s end)
-CreateToggle(SurvivalTab, "Bunny Hop (auto-jump)", false, function(s) Config.BunnyHop.Enabled = s end)
-CreateToggle(SurvivalTab, "Fly Mode", false, function(s) Config.Fly.Enabled = s end)
-CreateSlider(SurvivalTab, "Fly Speed", 10, 500, 50, function(v) Config.Fly.Speed = v end)
-CreateToggle(SurvivalTab, "Noclip", false, function(s) Config.Noclip.Enabled = s end)
-
-CreateSection(SurvivalTab, "🛡️ SURVIVAL")
-
-CreateToggle(SurvivalTab, "Speed Burst (Dash)", false, function(s)
-    Config.SpeedBurst.Enabled = s
-end)
-CreateButton(SurvivalTab, "💨 DASH NOW (klik)", function()
+CreateSection(SurvivorTab, "🛡️ SURVIVOR - DEFENSE")
+CreateButton(SurvivorTab, "💨 DASH NOW", function()
     local h = getHum()
     if h then
         h.WalkSpeed = 150
@@ -470,14 +430,10 @@ CreateButton(SurvivalTab, "💨 DASH NOW (klik)", function()
         h.WalkSpeed = Config.Speed.Enabled and Config.Speed.Value or 16
     end
 end)
-CreateSlider(SurvivalTab, "Burst Duration (s)", 1, 5, 1, function(v) Config.SpeedBurst.Duration = v end)
-
-CreateToggle(SurvivalTab, "Auto Dodge (kabur dari killer)", false, function(s)
-    Config.AutoDodge.Enabled = s
-end)
-CreateSlider(SurvivalTab, "Dodge Radius (stud)", 10, 100, 30, function(v) Config.AutoDodge.Radius = v end)
-
-CreateToggle(SurvivalTab, "Invisible", false, function(s)
+CreateSlider(SurvivorTab, "Dash Duration (s)", 1, 5, 1, function(v) Config.SpeedBurst.Duration = v end)
+CreateToggle(SurvivorTab, "Auto Dodge (kabur dari killer)", false, function(s) Config.AutoDodge.Enabled = s end)
+CreateSlider(SurvivorTab, "Dodge Radius", 10, 100, 30, function(v) Config.AutoDodge.Radius = v end)
+CreateToggle(SurvivorTab, "Invisible", false, function(s)
     Config.Invisible.Enabled = s
     local c = getChar()
     if c then
@@ -490,21 +446,43 @@ CreateToggle(SurvivalTab, "Invisible", false, function(s)
         end
     end
 end)
-CreateSlider(SurvivalTab, "Invisibility Level", 0.5, 1, 0.9, function(v) Config.Invisible.Transparency = v end)
+CreateSlider(SurvivorTab, "Invisibility Level", 0.5, 1, 0.9, function(v) Config.Invisible.Transparency = v end)
+CreateToggle(SurvivorTab, "Auto Heal", false, function(s) Config.AutoHeal.Enabled = s end)
+CreateSlider(SurvivorTab, "Heal Threshold", 10, 90, 30, function(v) Config.AutoHeal.Threshold = v end)
 
-CreateToggle(SurvivalTab, "Auto Heal (HP < threshold)", false, function(s) Config.AutoHeal.Enabled = s end)
-CreateSlider(SurvivalTab, "Heal Threshold", 10, 90, 30, function(v) Config.AutoHeal.Threshold = v end)
-
-CreateButton(SurvivalTab, "Reset Character", function()
+CreateSection(SurvivorTab, "🔧 SURVIVOR - REPAIR")
+CreateToggle(SurvivorTab, "✨ Auto Perfect Repair", false, function(s)
+    Config.AutoPerfectRepair.Enabled = s
+end)
+CreateButton(SurvivorTab, "Reset Character", function()
     local c = getChar(); if c then c:BreakJoints() end
 end)
 
 --==============================================================
--- COMBAT TAB
+-- KILLER TAB
 --==============================================================
-CreateSection(CombatTab, "⚔️ COMBAT")
+CreateSection(KillerTab, "🔪 KILLER - OFFENSE")
+CreateToggle(KillerTab, "Auto Hit (hit survivor terdekat)", false, function(s)
+    Config.AutoHit.Enabled = s
+end)
+CreateSlider(KillerTab, "Auto Hit Radius", 5, 50, 15, function(v) Config.AutoHit.Radius = v end)
 
-CreateToggle(CombatTab, "Hitbox Expander", false, function(s)
+CreateToggle(KillerTab, "Kill Aura (damage area)", false, function(s)
+    Config.KillAura.Enabled = s
+end)
+CreateSlider(KillerTab, "Kill Aura Radius", 5, 50, 20, function(v) Config.KillAura.Radius = v end)
+
+CreateToggle(KillerTab, "Silent Aim (auto lock)", false, function(s)
+    Config.SilentAim.Enabled = s
+end)
+
+CreateSection(KillerTab, "🎯 KILLER - TRACKING")
+CreateToggle(KillerTab, "Track Survivor (highlight warna hijau)", true, function(s)
+    Config.ESP.SurvivorTracker = s
+end)
+
+CreateSection(KillerTab, "⚔️ KILLER - COMBAT")
+CreateToggle(KillerTab, "Hitbox Expander", false, function(s)
     Config.HitboxExpand = s
     if not s then
         for _, p in pairs(Players:GetPlayers()) do
@@ -519,24 +497,16 @@ CreateToggle(CombatTab, "Hitbox Expander", false, function(s)
         end
     end
 end)
-CreateSlider(CombatTab, "Hitbox Size", 5, 50, 15, function(v) Config.HitboxSize = v end)
-
-CreateToggle(CombatTab, "FOV Circle", false, function(s) Config.FOVCircle = s end)
-CreateSlider(CombatTab, "FOV Radius", 50, 500, 120, function(v) Config.FOVRadius = v end)
-
-CreateButton(CombatTab, "Unlock FPS (240)", function()
-    pcall(function() setfpscap(240) end)
-end)
-
-CreateToggle(CombatTab, "Anti-Grab / Anti-Tangkap", false, function(s)
-    Config.AntiGrab.Enabled = s
-end)
+CreateSlider(KillerTab, "Hitbox Size", 5, 50, 15, function(v) Config.HitboxSize = v end)
+CreateToggle(KillerTab, "FOV Circle", false, function(s) Config.FOVCircle = s end)
+CreateSlider(KillerTab, "FOV Radius", 50, 500, 120, function(v) Config.FOVRadius = v end)
+CreateButton(KillerTab, "Unlock FPS (240)", function() pcall(function() setfpscap(240) end) end)
+CreateToggle(KillerTab, "Anti-Grab", false, function(s) Config.AntiGrab.Enabled = s end)
 
 --==============================================================
 -- ESP TAB
 --==============================================================
-CreateSection(ESPTab, "👁️ ESP SETTINGS")
-
+CreateSection(ESPTab, "👁️ ESP - PLAYER")
 CreateToggle(ESPTab, "Enable ESP", false, function(s) Config.ESP.Enabled = s end)
 CreateToggle(ESPTab, "Box ESP", true, function(s) Config.ESP.Box = s end)
 CreateToggle(ESPTab, "Name ESP", true, function(s) Config.ESP.Name = s end)
@@ -545,19 +515,24 @@ CreateToggle(ESPTab, "Distance ESP", true, function(s) Config.ESP.Distance = s e
 CreateToggle(ESPTab, "Line ESP", true, function(s) Config.ESP.Line = s end)
 CreateToggle(ESPTab, "Head Dot", true, function(s) Config.ESP.HeadDot = s end)
 CreateToggle(ESPTab, "Team Check", true, function(s) Config.ESP.TeamCheck = s end)
-CreateToggle(ESPTab, "🎯 Killer Tracker (highlight killer)", true, function(s) Config.ESP.KillerTracker = s end)
-CreateToggle(ESPTab, "📦 Item ESP (kunci, medkit, dll)", true, function(s) Config.ESP.ItemESP = s end)
-CreateSlider(ESPTab, "Max Distance", 100, 5000, 1000, function(v) Config.ESP.MaxDistance = v end)
+CreateToggle(ESPTab, "🎯 Killer Tracker (survivor mode)", true, function(s) Config.ESP.KillerTracker = s end)
+CreateSlider(ESPTab, "Max Distance Player", 100, 5000, 1000, function(v) Config.ESP.MaxDistance = v end)
+
+CreateSection(ESPTab, "📦 ESP - GENERATOR (SURVIVAL)")
+CreateToggle(ESPTab, "Generator ESP", true, function(s) Config.ESP.GeneratorESP = s end)
+CreateSlider(ESPTab, "Generator Max Radius", 50, 2000, 300, function(v) Config.ESP.GeneratorRadius = v end)
+
+CreateSection(ESPTab, "🎁 ESP - ITEM")
+CreateToggle(ESPTab, "Item ESP", true, function(s) Config.ESP.ItemESP = s end)
 
 CreateSection(ESPTab, "🚨 ALERT")
-CreateToggle(ESPTab, "Killer Alert (notif kalau killer deket)", false, function(s) Config.KillerAlert.Enabled = s end)
+CreateToggle(ESPTab, "Killer Alert", false, function(s) Config.KillerAlert.Enabled = s end)
 CreateSlider(ESPTab, "Alert Radius", 20, 200, 50, function(v) Config.KillerAlert.Radius = v end)
 
 --==============================================================
 -- TELEPORT TAB
 --==============================================================
 CreateSection(TeleportTab, "🌐 TELEPORT")
-
 CreateTextBox(TeleportTab, "Masukkan nama player...", function(text) Config.TPPTarget = text end)
 CreateButton(TeleportTab, "Teleport ke Player", function()
     if Config.TPPTarget == "" then return end
@@ -567,8 +542,7 @@ CreateButton(TeleportTab, "Teleport ke Player", function()
         if myHrp then myHrp.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0) end
     end
 end)
-
-CreateToggle(TeleportTab, "Click Teleport (klik map)", false, function(s) Config.ClickTP = s end)
+CreateToggle(TeleportTab, "Click Teleport", false, function(s) Config.ClickTP = s end)
 CreateButton(TeleportTab, "TP ke Spawn", function()
     local hrp = getHRP()
     if hrp and workspace:FindFirstChild("SpawnLocation") then
@@ -578,16 +552,12 @@ end)
 CreateButton(TeleportTab, "TP ke 0,0,0", function()
     local hrp = getHRP(); if hrp then hrp.CFrame = CFrame.new(0, 50, 0) end
 end)
-CreateButton(TeleportTab, "Random Teleport", function()
-    local hrp = getHRP()
-    if hrp then hrp.CFrame = CFrame.new(math.random(-500, 500), 100, math.random(-500, 500)) end
-end)
 
-CreateSection(TeleportTab, "📋 PLAYER LIST (tap untuk TP)")
+CreateSection(TeleportTab, "📋 PLAYER LIST (tap = TP)")
 local PlayerListFrame = create("Frame", {
     Parent = TeleportTab,
     BackgroundColor3 = Color3.fromRGB(25, 22, 40),
-    Size = UDim2.new(1, -10, 0, 200),
+    Size = UDim2.new(1, -10, 0, 180),
 })
 create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = PlayerListFrame })
 create("UIListLayout", { Parent = PlayerListFrame, Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder })
@@ -602,7 +572,7 @@ local function RefreshPlayerList()
         if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             dist = math.floor((Camera.CFrame.Position - plr.Character.HumanoidRootPart.Position).Magnitude)
         end
-        local tag = isKiller(plr) and "☠️ " or ""
+        local tag = isKiller(plr) and "☠️ " or "🏃 "
         local Btn = create("TextButton", {
             Parent = PlayerListFrame, BackgroundColor3 = Color3.fromRGB(50, 40, 80),
             Size = UDim2.new(1, -10, 0, 24), Font = Enum.Font.Gotham,
@@ -619,7 +589,6 @@ local function RefreshPlayerList()
         end)
     end
 end
-
 RefreshPlayerList()
 Players.PlayerAdded:Connect(RefreshPlayerList)
 Players.PlayerRemoving:Connect(function() task.wait(0.5) RefreshPlayerList() end)
@@ -628,7 +597,6 @@ Players.PlayerRemoving:Connect(function() task.wait(0.5) RefreshPlayerList() end
 -- MISC TAB
 --==============================================================
 CreateSection(MiscTab, "⚙️ MISC")
-
 CreateToggle(MiscTab, "Anti-AFK", true, function(s) Config.AntiAFK.Enabled = s end)
 CreateToggle(MiscTab, "Fullbright", false, function(s)
     Config.Fullbright.Enabled = s
@@ -644,21 +612,16 @@ CreateSlider(MiscTab, "FOV Value", 30, 120, 70, function(v)
     Config.FOV.Value = v
     if Config.FOV.Enabled then Camera.FieldOfView = v end
 end)
-
-CreateToggle(MiscTab, "Map Reveal (hilangkan fog)", false, function(s)
+CreateToggle(MiscTab, "Map Reveal", false, function(s)
     Config.MapReveal.Enabled = s
     if s then
-        Lighting.FogEnd = 1e6
-        Lighting.FogStart = 1e6
+        Lighting.FogEnd = 1e6; Lighting.FogStart = 1e6
         for _, obj in pairs(workspace:GetDescendants()) do
             if obj:IsA("Atmosphere") then obj.Density = 0 end
         end
     end
 end)
-
-CreateButton(MiscTab, "Rejoin Server", function()
-    TeleportService:Teleport(game.PlaceId, LocalPlayer)
-end)
+CreateButton(MiscTab, "Rejoin Server", function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
 CreateButton(MiscTab, "Server Hop", function()
     local ok, res = pcall(function()
         return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
@@ -676,38 +639,88 @@ CreateButton(MiscTab, "Copy Job ID", function()
     if setclipboard then setclipboard(game.JobId) end
     StarterGui:SetCore("SendNotification", {Title = "BOLONG HUB", Text = "JobId copied!", Duration = 3})
 end)
-CreateButton(MiscTab, "Unlock Mouse (mobile)", function()
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-end)
 
 --==============================================================
 -- CREDIT TAB
 --==============================================================
-CreateSection(CreditTab, "💜 BOLONG HUB v2.1")
-create("TextLabel", {
-    Parent = CreditTab, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 0, 25),
-    Font = Enum.Font.Gotham, Text = "Made with ❤️ by AmbaGpt",
-    TextColor3 = Color3.fromRGB(255, 150, 200), TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left,
-})
-create("TextLabel", {
-    Parent = CreditTab, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 0, 25),
-    Font = Enum.Font.Gotham, Text = "For: Sayang ❤️",
-    TextColor3 = Color3.fromRGB(255, 100, 150), TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left,
-})
-create("TextLabel", {
-    Parent = CreditTab, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 0, 25),
-    Font = Enum.Font.Gotham, Text = "Repo: redfingernew25-pixel/Bolong-hub",
-    TextColor3 = Color3.fromRGB(180, 180, 200), TextSize = 12,
-    TextXAlignment = Enum.TextXAlignment.Left,
-})
-create("TextLabel", {
-    Parent = CreditTab, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 0, 25),
-    Font = Enum.Font.Gotham, Text = "Survival Edition - 60+ Fitur",
-    TextColor3 = Color3.fromRGB(150, 150, 150), TextSize = 12,
-    TextXAlignment = Enum.TextXAlignment.Left,
-})
+CreateSection(CreditTab, "💜 BOLONG HUB v3.0")
+for _, t in pairs({
+    "Survivor vs Killer Edition",
+    "Made with ❤️ by AmbaGpt",
+    "For: Sayang ❤️",
+    "Repo: redfingernew25-pixel/Bolong-hub",
+    "70+ Fitur Aktif",
+}) do
+    create("TextLabel", {
+        Parent = CreditTab, BackgroundTransparency = 1,
+        Size = UDim2.new(1, -10, 0, 22),
+        Font = Enum.Font.Gotham, Text = t,
+        TextColor3 = Color3.fromRGB(200, 200, 220), TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+end
+
+--==============================================================
+-- GENERATOR TRACKER
+--==============================================================
+local Generators = {}
+
+local function findGenerators()
+    local found = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if isGenerator(obj) then
+            local pos, name
+            if obj:IsA("BasePart") then
+                pos = obj.Position; name = obj.Name
+            elseif obj:IsA("Model") then
+                local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                if p then pos = p.Position; name = obj.Name end
+            end
+            if pos then
+                table.insert(found, { Obj = obj, Position = pos, Name = name })
+            end
+        end
+    end
+    return found
+end
+
+-- Update list generator tiap 5 detik
+task.spawn(function()
+    while task.wait(5) do
+        Generators = findGenerators()
+    end
+end)
+Generators = findGenerators()
+
+-- Deteksi progress generator
+local function getGeneratorProgress(gen)
+    local obj = gen.Obj
+    -- Coba cari value/progress di objek
+    for _, child in pairs(obj:GetDescendants()) do
+        if child:IsA("NumberValue") or child:IsA("IntValue") then
+            local n = string.lower(child.Name)
+            if n:find("progress") or n:find("percent") or n:find("value") or n:find("fill") then
+                return child.Value
+            end
+        end
+    end
+    return nil
+end
+
+-- Deteksi player yang repair generator
+local function getRepairingPlayers(gen)
+    local repairing = {}
+    local genPos = gen.Position
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and (hrp.Position - genPos).Magnitude < 8 then
+                table.insert(repairing, plr.Name)
+            end
+        end
+    end
+    return repairing
+end
 
 --==============================================================
 -- MAIN LOOPS
@@ -749,14 +762,10 @@ RunService.RenderStepped:Connect(function()
         if flyBV then flyBV:Destroy(); flyBV = nil end
         if flyBG then flyBG:Destroy(); flyBG = nil end
     end
-
-    -- Speed
     if Config.Speed.Enabled then
         local h = getHum()
         if h and h.WalkSpeed ~= Config.Speed.Value then h.WalkSpeed = Config.Speed.Value end
     end
-
-    -- Noclip
     if Config.Noclip.Enabled then
         local c = getChar()
         if c then
@@ -765,8 +774,6 @@ RunService.RenderStepped:Connect(function()
             end
         end
     end
-
-    -- Hitbox
     if Config.HitboxExpand then
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character then
@@ -787,12 +794,10 @@ UserInputService.JumpRequest:Connect(function()
         local h = getHum(); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
     end
 end)
-
 task.spawn(function()
     while task.wait(0.1) do
         if Config.BunnyHop.Enabled then
-            local h = getHum()
-            if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+            local h = getHum(); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
         end
     end
 end)
@@ -806,14 +811,9 @@ task.spawn(function()
                 for _, plr in pairs(Players:GetPlayers()) do
                     if plr ~= LocalPlayer and isKiller(plr) and plr.Character then
                         local kHrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                        if kHrp then
-                            local dist = (myHrp.Position - kHrp.Position).Magnitude
-                            if dist < Config.AutoDodge.Radius then
-                                -- Kabur ke arah berlawanan
-                                local dir = (myHrp.Position - kHrp.Position).Unit
-                                local target = myHrp.Position + dir * 50
-                                myHrp.CFrame = CFrame.new(target)
-                            end
+                        if kHrp and (myHrp.Position - kHrp.Position).Magnitude < Config.AutoDodge.Radius then
+                            local dir = (myHrp.Position - kHrp.Position).Unit
+                            myHrp.CFrame = CFrame.new(myHrp.Position + dir * 50)
                         end
                     end
                 end
@@ -828,14 +828,78 @@ task.spawn(function()
         if Config.AutoHeal.Enabled then
             local h = getHum()
             if h and h.Health < Config.AutoHeal.Threshold and h.Health > 0 then
-                -- Cari tool heal di backpack
                 local bp = LocalPlayer:FindFirstChild("Backpack")
                 if bp then
                     for _, tool in pairs(bp:GetChildren()) do
-                        if tool:IsA("Tool") and (string.lower(tool.Name):find("med") or string.lower(tool.Name):find("heal") or string.lower(tool.Name):find("bandage")) then
-                            tool.Parent = getChar()
-                            tool:Activate()
-                            break
+                        if tool:IsA("Tool") and (string.lower(tool.Name):find("med") or string.lower(tool.Name):find("heal")) then
+                            tool.Parent = getChar(); tool:Activate(); break
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- AUTO PERFECT REPAIR (deteksi interaksi repair)
+task.spawn(function()
+    while task.wait(0.5) do
+        if Config.AutoPerfectRepair.Enabled then
+            pcall(function()
+                -- Cari remote yang berkaitan dengan repair
+                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                    if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+                        local n = string.lower(remote.Name)
+                        if n:find("repair") or n:find("fix") or n:find("perfect") then
+                            -- Kirim value perfect (biasanya 1 atau 100)
+                            pcall(function() remote:FireServer(1) end)
+                            pcall(function() remote:FireServer(100) end)
+                            pcall(function() remote:InvokeServer(1) end)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- AUTO HIT (Killer)
+task.spawn(function()
+    while task.wait(0.3) do
+        if Config.AutoHit.Enabled then
+            local myHrp = getHRP()
+            if myHrp then
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr ~= LocalPlayer and not isKiller(plr) and plr.Character then
+                        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp and (myHrp.Position - hrp.Position).Magnitude < Config.AutoHit.Radius then
+                            pcall(function()
+                                -- Kirim hit ke server
+                                local tool = getChar() and getChar():FindFirstChildOfClass("Tool")
+                                if tool then tool:Activate() end
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- KILL AURA
+task.spawn(function()
+    while task.wait(0.3) do
+        if Config.KillAura.Enabled then
+            local myHrp = getHRP()
+            if myHrp then
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr ~= LocalPlayer and not isKiller(plr) and plr.Character then
+                        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp and (myHrp.Position - hrp.Position).Magnitude < Config.KillAura.Radius then
+                            pcall(function()
+                                local tool = getChar() and getChar():FindFirstChildOfClass("Tool")
+                                if tool then tool:Activate() end
+                            end)
                         end
                     end
                 end
@@ -856,7 +920,7 @@ task.spawn(function()
                         if kHrp and (myHrp.Position - kHrp.Position).Magnitude < Config.KillerAlert.Radius then
                             StarterGui:SetCore("SendNotification", {
                                 Title = "🚨 KILLER ALERT 🚨",
-                                Text = plr.Name .. " dalam radius " .. Config.KillerAlert.Radius .. " stud!",
+                                Text = plr.Name .. " dalam radius " .. Config.KillerAlert.Radius,
                                 Duration = 2,
                             })
                         end
@@ -896,26 +960,6 @@ task.spawn(function()
     end
 end)
 
--- ANTI-GRAB
-task.spawn(function()
-    while task.wait(0.5) do
-        if Config.AntiGrab.Enabled then
-            local c = getChar()
-            if c then
-                local hrp = c:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    -- Hapus constraint grab
-                    for _, obj in pairs(hrp:GetChildren()) do
-                        if obj:IsA("WeldConstraint") or obj:IsA("Weld") or obj:IsA("RopeConstraint") then
-                            obj:Destroy()
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
 -- FOV CIRCLE
 local fovCircle = Drawing and Drawing.new("Circle") or nil
 if fovCircle then
@@ -925,7 +969,6 @@ if fovCircle then
     fovCircle.NumSides = 64
     fovCircle.Filled = false
 end
-
 RunService.RenderStepped:Connect(function()
     if fovCircle then
         if Config.FOVCircle then
@@ -939,13 +982,15 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --==============================================================
--- ESP SYSTEM (Player + Killer + Item)
+-- ESP SYSTEM
 --==============================================================
 local espObjs = {}
 local itemESPObjs = {}
+local genESPObjs = {}
 
 local function getESPColor(plr)
     if isKiller(plr) and Config.ESP.KillerTracker then return Config.ESP.KillerColor end
+    if not isKiller(plr) and Config.ESP.SurvivorTracker then return Config.ESP.SurvivorColor end
     if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then return Config.ESP.TeamColor end
     return Config.ESP.EnemyColor
 end
@@ -978,13 +1023,6 @@ Players.PlayerAdded:Connect(function(plr)
     end)
 end)
 Players.PlayerRemoving:Connect(removeESP)
-LocalPlayer.CharacterAdded:Connect(function(c)
-    task.wait(1)
-    if Config.Speed.Enabled then
-        local h = c:FindFirstChildOfClass("Humanoid")
-        if h then h.WalkSpeed = Config.Speed.Value end
-    end
-end)
 
 RunService.RenderStepped:Connect(function()
     if not Config.ESP.Enabled then
@@ -994,10 +1032,13 @@ RunService.RenderStepped:Connect(function()
         for _, o in pairs(itemESPObjs) do
             for _, d in pairs(o) do pcall(function() d.Visible = false end) end
         end
+        for _, o in pairs(genESPObjs) do
+            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
+        end
         return
     end
 
-    -- Player ESP
+    -- PLAYER ESP
     for plr, o in pairs(espObjs) do
         pcall(function()
             local char = plr.Character
@@ -1011,7 +1052,6 @@ RunService.RenderStepped:Connect(function()
                 for _, d in pairs(o) do d.Visible = false end
                 return
             end
-
             local dist = (Camera.CFrame.Position - hrp.Position).Magnitude
             local col = getESPColor(plr)
             local sp, onScr = Camera:WorldToViewportPoint(hrp.Position)
@@ -1019,7 +1059,6 @@ RunService.RenderStepped:Connect(function()
                 for _, d in pairs(o) do d.Visible = false end
                 return
             end
-
             local head = char:FindFirstChild("Head")
             local topP = head and Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or sp
             local botP = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
@@ -1035,7 +1074,7 @@ RunService.RenderStepped:Connect(function()
 
             if Config.ESP.Name then
                 o.Name.Position = Vector2.new(sp.X, sp.Y - 40)
-                o.Name.Text = (isKiller(plr) and "☠️ " or "") .. plr.Name
+                o.Name.Text = (isKiller(plr) and "☠️ " or "🏃 ") .. plr.Name
                 o.Name.Color = col
                 o.Name.Visible = true
             else o.Name.Visible = false end
@@ -1073,15 +1112,54 @@ RunService.RenderStepped:Connect(function()
         end)
     end
 
+    -- GENERATOR ESP
+    if Config.ESP.GeneratorESP then
+        for i, gen in pairs(Generators) do
+            pcall(function()
+                local pos = gen.Position
+                local dist = (Camera.CFrame.Position - pos).Magnitude
+                if dist > Config.ESP.GeneratorRadius then
+                    if genESPObjs[gen.Obj] then
+                        for _, d in pairs(genESPObjs[gen.Obj]) do d.Visible = false end
+                    end
+                else
+                    if not genESPObjs[gen.Obj] then
+                        local tag = Drawing.new("Text")
+                        tag.Visible = false; tag.Size = 13; tag.Center = true
+                        tag.Outline = true; tag.Font = 2
+                        genESPObjs[gen.Obj] = { Tag = tag }
+                    end
+                    local sp, onScr = Camera:WorldToViewportPoint(pos)
+                    local t = genESPObjs[gen.Obj]
+                    if t and onScr then
+                        local progress = getGeneratorProgress(gen)
+                        local repairing = getRepairingPlayers(gen)
+                        local progStr = progress and (tostring(math.floor(progress)) .. "%") or "??"
+                        local repairStr = #repairing > 0 and (" 👥" .. #repairing .. " (" .. table.concat(repairing, ",") .. ")") or ""
+                        t.Tag.Position = Vector2.new(sp.X, sp.Y)
+                        t.Tag.Text = "⚡ " .. gen.Name .. " [" .. math.floor(dist) .. "m] " .. progStr .. repairStr
+                        t.Tag.Color = Config.ESP.GeneratorColor
+                        t.Tag.Visible = true
+                    elseif t then
+                        t.Tag.Visible = false
+                    end
+                end
+            end)
+        end
+    else
+        for _, o in pairs(genESPObjs) do
+            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
+        end
+    end
+
     -- ITEM ESP
     if Config.ESP.ItemESP then
         for _, obj in pairs(workspace:GetDescendants()) do
-            if isItem(obj) then
+            if isItem(obj) and not isGenerator(obj) then
                 local pos
                 if obj:IsA("BasePart") then pos = obj.Position
-                elseif obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position
                 elseif obj:IsA("Model") then
-                    local p = obj:FindFirstChildWhichIsA("BasePart")
+                    local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
                     if p then pos = p.Position end
                 end
                 if pos then
@@ -1115,19 +1193,26 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Init
+-- Init existing players
 for _, plr in pairs(Players:GetPlayers()) do
     if plr ~= LocalPlayer then createESP(plr) end
 end
 
+LocalPlayer.CharacterAdded:Connect(function(c)
+    task.wait(1)
+    if Config.Speed.Enabled then
+        local h = c:FindFirstChildOfClass("Humanoid")
+        if h then h.WalkSpeed = Config.Speed.Value end
+    end
+end)
+
 --==============================================================
--- NOTIF LOAD
+-- NOTIF
 --==============================================================
 StarterGui:SetCore("SendNotification", {
-    Title = "⚡ BOLONG HUB v2.1",
-    Text = "Survival Edition loaded! 60+ fitur ❤️",
+    Title = "⚡ BOLONG HUB v3.0",
+    Text = "Survivor vs Killer Edition! 70+ fitur ❤️",
     Duration = 5,
 })
 
-print("[BOLONG HUB v2.1] Loaded successfully!")
-print("[BOLONG HUB] Repo: redfingernew25-pixel/Bolong-hub")
+print("[BOLONG HUB v3.0] Loaded! Repo: redfingernew25-pixel/Bolong-hub")
