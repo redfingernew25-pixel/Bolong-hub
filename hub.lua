@@ -780,40 +780,63 @@ local function getRepairingPlayers(gen)
 end
 
 --==============================================================
--- AUTO PERFECT SKILL CHECK (Violence District)
+-- AUTO PERFECT SKILL CHECK v2 (Violence District - Aggressive)
 --==============================================================
 local repairRemotes = {}
 local skillCheckGuis = {}
+local remoteFound = false
 
+-- Scan remote tiap 2 detik
 task.spawn(function()
-    while task.wait(1) do
+    while task.wait(2) do
         repairRemotes = {}
         skillCheckGuis = {}
-        -- Cari remote
+        
+        -- Scan ReplicatedStorage
         for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
             if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
                 local n = string.lower(remote.Name)
-                if n:find("skill") or n:find("perfect") or n:find("repair") or n:find("generator") or n:find("check") or n:find("hit") then
+                if n:find("skill") or n:find("perfect") or n:find("repair") 
+                    or n:find("generator") or n:find("check") or n:find("hit")
+                    or n:find("qte") or n:find("minigame") then
                     table.insert(repairRemotes, remote)
                 end
             end
         end
-        -- Cari GUI skill check di PlayerGui
+        
+        -- Scan PlayerGui
         for _, obj in pairs(PlayerGui:GetDescendants()) do
             if obj:IsA("ScreenGui") or obj:IsA("Frame") then
                 local n = string.lower(obj.Name)
-                if n:find("skill") or n:find("check") or n:find("generator") then
+                if n:find("skill") or n:find("check") or n:find("generator") 
+                    or n:find("qte") or n:find("minigame") then
                     table.insert(skillCheckGuis, obj)
                 end
             end
         end
+        
+        -- Scan Workspace juga (kadang ada remote di dalam part)
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                local n = string.lower(obj.Name)
+                if n:find("skill") or n:find("perfect") or n:find("repair") then
+                    table.insert(repairRemotes, obj)
+                end
+            end
+        end
+        
+        if #repairRemotes > 0 and not remoteFound then
+            remoteFound = true
+            print("[BOLONG HUB] Found " .. #repairRemotes .. " repair remotes")
+        end
     end
 end)
 
+-- Loop auto perfect (super cepat)
 task.spawn(function()
-    while task.wait(0.05) do
+    while task.wait(0.03) do
         if Config.AutoPerfectSkillCheck.Enabled then
-            -- Method 1: Fire remote
+            -- Method 1: Fire semua remote yang ketemu
             for _, remote in pairs(repairRemotes) do
                 pcall(function()
                     if remote:IsA("RemoteEvent") then
@@ -821,36 +844,47 @@ task.spawn(function()
                         remote:FireServer("perfect")
                         remote:FireServer(1)
                         remote:FireServer(100)
+                        remote:FireServer("hit")
                     elseif remote:IsA("RemoteFunction") then
                         pcall(function() remote:InvokeServer("perfect") end)
                         pcall(function() remote:InvokeServer(true) end)
                         pcall(function() remote:InvokeServer(1) end)
+                        pcall(function() remote:InvokeServer("hit") end)
                     end
                 end)
             end
-            -- Method 2: Auto klik GUI skill check
+            
+            -- Method 2: Auto klik button GUI skill check
             for _, gui in pairs(skillCheckGuis) do
-                for _, btn in pairs(gui:GetDescendants()) do
-                    if btn:IsA("TextButton") or btn:IsA("ImageButton") then
-                        pcall(function()
-                            btn.MouseButton1Click:Fire()
-                            btn.MouseButton1Down:Fire()
-                        end)
+                pcall(function()
+                    for _, btn in pairs(gui:GetDescendants()) do
+                        if btn:IsA("TextButton") or btn:IsA("ImageButton") then
+                            pcall(function() btn.MouseButton1Click:Fire() end)
+                            pcall(function() btn.MouseButton1Down:Fire() end)
+                            pcall(function() btn.Activated:Fire() end)
+                        end
                     end
-                end
+                end)
             end
+            
+            -- Method 3: Simulate input space (kadang skill check pake space)
+            pcall(function()
+                local VirtualInputManager = game:GetService("VirtualInputManager")
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+            end)
         end
     end
 end)
 
--- No Skill Check (hapus GUI skill check dari PlayerGui)
+-- No Skill Check (hide GUI)
 task.spawn(function()
     while task.wait(0.1) do
         if Config.NoSkillCheck.Enabled then
             for _, obj in pairs(PlayerGui:GetDescendants()) do
                 if obj:IsA("ScreenGui") then
                     local n = string.lower(obj.Name)
-                    if n:find("skill") or n:find("check") then
+                    if n:find("skill") or n:find("check") or n:find("qte") then
                         pcall(function() obj.Enabled = false end)
                     end
                 end
@@ -1096,22 +1130,47 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --==============================================================
--- ESP SYSTEM (Player + Generator + Item)
+-- ESP SYSTEM v3.2.1 SAFE MODE (Anti-Error + Auto-Fallback)
 --==============================================================
 local espObjs = {}
 local itemESPObjs = {}
 local genESPObjs = {}
 
+-- Cek Drawing API support
+local hasDrawing = pcall(function()
+    local test = Drawing.new("Square")
+    test.Visible = false
+    test:Remove()
+end)
+
+print("[BOLONG HUB] Drawing Support: " .. tostring(hasDrawing))
+
+if not hasDrawing then
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "⚠️ BOLONG HUB",
+            Text = "Executor lu GA SUPPORT Drawing API. Coba update Delta / pake Fluxus!",
+            Duration = 8,
+        })
+    end)
+end
+
+-- Warna helper (anti-nil error)
 local function getESPColor(plr)
-    if isKiller(plr) and Config.ESP.KillerTracker then return Config.ESP.KillerColor end
-    if not isKiller(plr) and Config.ESP.SurvivorTracker then return Config.ESP.SurvivorColor end
-    if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then return Config.ESP.TeamColor end
+    local ok = pcall(function()
+        if isKiller(plr) and Config.ESP.KillerTracker then return Config.ESP.KillerColor end
+        if not isKiller(plr) and Config.ESP.SurvivorTracker then return Config.ESP.SurvivorColor end
+        if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then return Config.ESP.TeamColor end
+        return Config.ESP.EnemyColor
+    end)
+    if ok then return Config.ESP.EnemyColor end
     return Config.ESP.EnemyColor
 end
 
 local function createESP(plr)
     if plr == LocalPlayer then return end
     if espObjs[plr] then return end
+    if not hasDrawing then return end
     pcall(function()
         local box = Drawing.new("Square"); box.Visible = false; box.Thickness = 1; box.Filled = false; box.Transparency = 1
         local nameTag = Drawing.new("Text"); nameTag.Visible = false; nameTag.Size = 14; nameTag.Center = true; nameTag.Outline = true; nameTag.Font = 2
@@ -1138,122 +1197,150 @@ Players.PlayerAdded:Connect(function(plr)
 end)
 Players.PlayerRemoving:Connect(removeESP)
 
+-- Init existing players dulu
+for _, plr in pairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then createESP(plr) end
+end
+
+-- Error tracking (biar ga spam)
+local espErrorShown = false
+
 RunService.RenderStepped:Connect(function()
-    if not Config.ESP.Enabled then
-        for _, o in pairs(espObjs) do
-            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
-        end
-        for _, o in pairs(itemESPObjs) do
-            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
-        end
-        for _, o in pairs(genESPObjs) do
-            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
-        end
-        return
-    end
-
-    -- PLAYER ESP
-    for plr, o in pairs(espObjs) do
-        pcall(function()
-            local char = plr.Character
-            if not char then
-                for _, d in pairs(o) do d.Visible = false end
-                return
+    if not hasDrawing then return end
+    
+    local ok, err = pcall(function()
+        -- Kalau ESP mati, hide semua
+        if not Config.ESP.Enabled then
+            for _, o in pairs(espObjs) do
+                for _, d in pairs(o) do pcall(function() d.Visible = false end) end
             end
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hrp or not hum or hum.Health <= 0 then
-                for _, d in pairs(o) do d.Visible = false end
-                return
+            for _, o in pairs(itemESPObjs) do
+                for _, d in pairs(o) do pcall(function() d.Visible = false end) end
             end
-            local dist = (Camera.CFrame.Position - hrp.Position).Magnitude
-            local col = getESPColor(plr)
-            local sp, onScr = Camera:WorldToViewportPoint(hrp.Position)
-            if not onScr or dist > Config.ESP.MaxDistance then
-                for _, d in pairs(o) do d.Visible = false end
-                return
+            for _, o in pairs(genESPObjs) do
+                for _, d in pairs(o) do pcall(function() d.Visible = false end) end
             end
-            local head = char:FindFirstChild("Head")
-            local topP = head and Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or sp
-            local botP = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
-            local hgt = math.abs(topP.Y - botP.Y)
-            local wdt = hgt / 2
-
-            if Config.ESP.Box then
-                o.Box.Size = Vector2.new(wdt, hgt)
-                o.Box.Position = Vector2.new(sp.X - wdt / 2, sp.Y - hgt / 2)
-                o.Box.Color = col
-                o.Box.Visible = true
-            else o.Box.Visible = false end
-
-            if Config.ESP.Name then
-                o.Name.Position = Vector2.new(sp.X, sp.Y - 40)
-                o.Name.Text = (isKiller(plr) and "☠️ " or "🏃 ") .. plr.Name
-                o.Name.Color = col
-                o.Name.Visible = true
-            else o.Name.Visible = false end
-
-            if Config.ESP.Health then
-                local hpR = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-                local barX = sp.X - wdt / 2 - 8
-                o.Health.From = Vector2.new(barX, botP.Y)
-                o.Health.To = Vector2.new(barX, botP.Y - (hgt * hpR))
-                o.Health.Color = Color3.fromRGB(math.floor(255 * (1 - hpR)), math.floor(255 * hpR), 0)
-                o.Health.Visible = true
-            else o.Health.Visible = false end
-
-            if Config.ESP.Distance then
-                o.Dist.Position = Vector2.new(sp.X, sp.Y + 35)
-                o.Dist.Text = "[" .. math.floor(dist) .. "m]"
-                o.Dist.Color = col
-                o.Dist.Visible = true
-            else o.Dist.Visible = false end
-
-            if Config.ESP.Line then
-                o.Line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                o.Line.To = Vector2.new(sp.X, sp.Y)
-                o.Line.Color = col
-                o.Line.Visible = true
-            else o.Line.Visible = false end
-
-            if Config.ESP.HeadDot and head then
-                local hp = Camera:WorldToViewportPoint(head.Position)
-                o.HeadDot.Position = Vector2.new(hp.X, hp.Y)
-                o.HeadDot.Radius = 4
-                o.HeadDot.Color = col
-                o.HeadDot.Visible = true
-            else o.HeadDot.Visible = false end
-        end)
-    end
-
-    -- GENERATOR ESP (Format: ⚡ Nama [jarak] progress% | Misa P=X (nama1, nama2))
-    if Config.ESP.GeneratorESP then
-        local sortedGens = {}
-        for i, gen in pairs(Generators) do
-            local dist = (Camera.CFrame.Position - gen.Position).Magnitude
-            if dist <= Config.ESP.GeneratorRadius then
-                table.insert(sortedGens, { Gen = gen, Dist = dist })
-            end
+            return
         end
-        table.sort(sortedGens, function(a, b) return a.Dist < b.Dist end)
 
-        for i, entry in pairs(sortedGens) do
-            local gen = entry.Gen
-            local dist = entry.Dist
-            local pos = gen.Position
+        --========== PLAYER ESP ==========
+        for plr, o in pairs(espObjs) do
             pcall(function()
-                if not genESPObjs[gen.Obj] then
-                    local tag = Drawing.new("Text")
-                    tag.Visible = false; tag.Size = 13; tag.Center = true
-                    tag.Outline = true; tag.Font = 2
-                    genESPObjs[gen.Obj] = { Tag = tag }
+                local char = plr.Character
+                if not char then
+                    for _, d in pairs(o) do d.Visible = false end
+                    return
                 end
-                local sp, onScr = Camera:WorldToViewportPoint(pos)
-                local t = genESPObjs[gen.Obj]
-                if t and onScr then
-                    if i <= Config.ESP.GeneratorMaxShow then
-                        local progress = getGeneratorProgress(gen)
-                        local repairing = getRepairingPlayers(gen)
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if not hrp or not hum or hum.Health <= 0 then
+                    for _, d in pairs(o) do d.Visible = false end
+                    return
+                end
+                
+                local dist = (Camera.CFrame.Position - hrp.Position).Magnitude
+                local col = Config.ESP.EnemyColor
+                pcall(function() col = getESPColor(plr) end)
+                
+                local sp, onScr = Camera:WorldToViewportPoint(hrp.Position)
+                if not onScr or dist > (Config.ESP.MaxDistance or 1000) then
+                    for _, d in pairs(o) do d.Visible = false end
+                    return
+                end
+                
+                local head = char:FindFirstChild("Head")
+                local topP = head and Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or sp
+                local botP = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                local hgt = math.abs(topP.Y - botP.Y)
+                local wdt = hgt / 2
+                
+                if hgt < 5 then
+                    for _, d in pairs(o) do d.Visible = false end
+                    return
+                end
+
+                -- BOX
+                if Config.ESP.Box then
+                    o.Box.Size = Vector2.new(wdt, hgt)
+                    o.Box.Position = Vector2.new(sp.X - wdt / 2, sp.Y - hgt / 2)
+                    o.Box.Color = col
+                    o.Box.Visible = true
+                else o.Box.Visible = false end
+
+                -- NAME
+                if Config.ESP.Name then
+                    o.Name.Position = Vector2.new(sp.X, sp.Y - 40)
+                    o.Name.Text = (isKiller(plr) and "☠️ " or "🏃 ") .. plr.Name
+                    o.Name.Color = col
+                    o.Name.Visible = true
+                else o.Name.Visible = false end
+
+                -- HEALTH
+                if Config.ESP.Health then
+                    local hpR = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+                    local barX = sp.X - wdt / 2 - 8
+                    o.Health.From = Vector2.new(barX, botP.Y)
+                    o.Health.To = Vector2.new(barX, botP.Y - (hgt * hpR))
+                    o.Health.Color = Color3.fromRGB(math.floor(255 * (1 - hpR)), math.floor(255 * hpR), 0)
+                    o.Health.Visible = true
+                else o.Health.Visible = false end
+
+                -- DISTANCE
+                if Config.ESP.Distance then
+                    o.Dist.Position = Vector2.new(sp.X, sp.Y + 35)
+                    o.Dist.Text = "[" .. math.floor(dist) .. "m]"
+                    o.Dist.Color = col
+                    o.Dist.Visible = true
+                else o.Dist.Visible = false end
+
+                -- LINE
+                if Config.ESP.Line then
+                    o.Line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                    o.Line.To = Vector2.new(sp.X, sp.Y)
+                    o.Line.Color = col
+                    o.Line.Visible = true
+                else o.Line.Visible = false end
+
+                -- HEAD DOT
+                if Config.ESP.HeadDot and head then
+                    local hp = Camera:WorldToViewportPoint(head.Position)
+                    o.HeadDot.Position = Vector2.new(hp.X, hp.Y)
+                    o.HeadDot.Radius = 4
+                    o.HeadDot.Color = col
+                    o.HeadDot.Visible = true
+                else o.HeadDot.Visible = false end
+            end)
+        end
+
+        --========== GENERATOR ESP ==========
+        if Config.ESP.GeneratorESP then
+            local sortedGens = {}
+            for i, gen in pairs(Generators) do
+                local dist = (Camera.CFrame.Position - gen.Position).Magnitude
+                if dist <= (Config.ESP.GeneratorRadius or 400) then
+                    table.insert(sortedGens, { Gen = gen, Dist = dist })
+                end
+            end
+            table.sort(sortedGens, function(a, b) return a.Dist < b.Dist end)
+
+            for i, entry in pairs(sortedGens) do
+                pcall(function()
+                    local gen = entry.Gen
+                    local dist = entry.Dist
+                    local pos = gen.Position
+                    if not genESPObjs[gen.Obj] then
+                        local tag = Drawing.new("Text")
+                        tag.Visible = false; tag.Size = 13; tag.Center = true
+                        tag.Outline = true; tag.Font = 2
+                        genESPObjs[gen.Obj] = { Tag = tag }
+                    end
+                    local sp, onScr = Camera:WorldToViewportPoint(pos)
+                    local t = genESPObjs[gen.Obj]
+                    if t and onScr and i <= (Config.ESP.GeneratorMaxShow or 5) then
+                        local progress = nil
+                        pcall(function() progress = getGeneratorProgress(gen) end)
+                        local repairing = {}
+                        pcall(function() repairing = getRepairingPlayers(gen) end)
                         local progStr = progress and (progress .. "%") or "0%"
                         local repairStr = ""
                         if #repairing > 0 then
@@ -1263,68 +1350,80 @@ RunService.RenderStepped:Connect(function()
                         t.Tag.Text = "⚡ " .. gen.Name .. " [" .. math.floor(dist) .. "m] " .. progStr .. repairStr
                         t.Tag.Color = Config.ESP.GeneratorColor
                         t.Tag.Visible = true
-                    else
+                    elseif t then
                         t.Tag.Visible = false
                     end
-                elseif t then
-                    t.Tag.Visible = false
-                end
-            end)
-        end
-        -- Hide yang ga ke-sort
-        for obj, o in pairs(genESPObjs) do
-            local found = false
-            for _, entry in pairs(sortedGens) do
-                if entry.Gen.Obj == obj then found = true; break end
+                end)
             end
-            if not found then
+
+            -- Hide yang ga masuk list
+            for obj, o in pairs(genESPObjs) do
+                local found = false
+                for _, entry in pairs(sortedGens) do
+                    if entry.Gen.Obj == obj then found = true; break end
+                end
+                if not found then
+                    for _, d in pairs(o) do pcall(function() d.Visible = false end) end
+                end
+            end
+        else
+            for _, o in pairs(genESPObjs) do
                 for _, d in pairs(o) do pcall(function() d.Visible = false end) end
             end
         end
-    else
-        for _, o in pairs(genESPObjs) do
-            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
-        end
-    end
 
-    -- ITEM ESP
-    if Config.ESP.ItemESP then
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if isItem(obj) and not isGenerator(obj) then
-                local pos
-                if obj:IsA("BasePart") then pos = obj.Position
-                elseif obj:IsA("Model") then
-                    local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                    if p then pos = p.Position end
-                end
-                if pos then
-                    if not itemESPObjs[obj] then
-                        pcall(function()
-                            local tag = Drawing.new("Text")
-                            tag.Visible = false; tag.Size = 12; tag.Center = true; tag.Outline = true; tag.Font = 2
-                            itemESPObjs[obj] = { Tag = tag }
-                        end)
+        --========== ITEM ESP ==========
+        if Config.ESP.ItemESP then
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if isItem(obj) and not isGenerator(obj) then
+                    local pos
+                    if obj:IsA("BasePart") then pos = obj.Position
+                    elseif obj:IsA("Model") then
+                        local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                        if p then pos = p.Position end
                     end
-                    local t = itemESPObjs[obj]
-                    if t then
-                        local sp, onScr = Camera:WorldToViewportPoint(pos)
-                        local dist = (Camera.CFrame.Position - pos).Magnitude
-                        if onScr and dist < Config.ESP.MaxDistance then
-                            t.Tag.Position = Vector2.new(sp.X, sp.Y)
-                            t.Tag.Text = "📦 " .. obj.Name .. " [" .. math.floor(dist) .. "m]"
-                            t.Tag.Color = Config.ESP.ItemColor
-                            t.Tag.Visible = true
-                        else
-                            t.Tag.Visible = false
+                    if pos then
+                        if not itemESPObjs[obj] then
+                            pcall(function()
+                                local tag = Drawing.new("Text")
+                                tag.Visible = false; tag.Size = 12; tag.Center = true; tag.Outline = true; tag.Font = 2
+                                itemESPObjs[obj] = { Tag = tag }
+                            end)
+                        end
+                        local t = itemESPObjs[obj]
+                        if t then
+                            local sp, onScr = Camera:WorldToViewportPoint(pos)
+                            local dist = (Camera.CFrame.Position - pos).Magnitude
+                            if onScr and dist < (Config.ESP.MaxDistance or 1000) then
+                                t.Tag.Position = Vector2.new(sp.X, sp.Y)
+                                t.Tag.Text = "📦 " .. obj.Name .. " [" .. math.floor(dist) .. "m]"
+                                t.Tag.Color = Config.ESP.ItemColor
+                                t.Tag.Visible = true
+                            else
+                                t.Tag.Visible = false
+                            end
                         end
                     end
                 end
             end
+        else
+            for _, o in pairs(itemESPObjs) do
+                for _, d in pairs(o) do pcall(function() d.Visible = false end) end
+            end
         end
-    else
-        for _, o in pairs(itemESPObjs) do
-            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
-        end
+    end)
+    
+    -- Print error sekali aja
+    if not ok and not espErrorShown then
+        espErrorShown = true
+        warn("[BOLONG HUB] ESP Error: " .. tostring(err))
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "⚠️ ESP Error",
+                Text = tostring(err):sub(1, 100),
+                Duration = 8,
+            })
+        end)
     end
 end)
 
