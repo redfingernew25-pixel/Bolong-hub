@@ -1,7 +1,9 @@
 --[[
-    BOLONG HUB v3.0 - SURVIVOR vs KILLER EDITION
+    BOLONG HUB v3.2 - VIOLENCE DISTRICT EDITION
     Author: AmbaGpt for sayang ❤️
-    Features: 70+ Fitur
+    Game: Violence District (5 Survivor vs 1 Killer)
+    Features: 75+ Fitur
+    Repo: redfingernew25-pixel/Bolong-hub
 ]]
 
 --==============================================================
@@ -17,11 +19,15 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+local Camera = Workspace.CurrentCamera
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
+--==============================================================
+-- CLEANUP
+--==============================================================
 if PlayerGui:FindFirstChild("BolongHubUI") then
     PlayerGui.BolongHubUI:Destroy()
 end
@@ -39,18 +45,19 @@ local Config = {
     BunnyHop = { Enabled = false },
     AntiAFK = { Enabled = true },
     SpeedBurst = { Duration = 1 },
-    
+
     -- Survival
     AutoDodge = { Enabled = false, Radius = 30 },
     Invisible = { Enabled = false, Transparency = 0.9 },
     AutoHeal = { Enabled = false, Threshold = 30 },
-    AutoPerfectRepair = { Enabled = false },
-    
+    AutoPerfectSkillCheck = { Enabled = false },
+    NoSkillCheck = { Enabled = false },
+
     -- Killer
     AutoHit = { Enabled = false, Radius = 15 },
     SilentAim = { Enabled = false },
     KillAura = { Enabled = false, Radius = 20 },
-    
+
     -- ESP
     ESP = {
         Enabled = false,
@@ -58,10 +65,11 @@ local Config = {
         Distance = true, Line = true, HeadDot = true,
         TeamCheck = true,
         KillerTracker = true,
+        SurvivorTracker = true,
         ItemESP = true,
         GeneratorESP = true,
-        GeneratorRadius = 300,
-        SurvivorTracker = true,
+        GeneratorRadius = 400,
+        GeneratorMaxShow = 5,
         EnemyColor = Color3.fromRGB(255, 50, 50),
         TeamColor = Color3.fromRGB(50, 255, 50),
         KillerColor = Color3.fromRGB(255, 0, 0),
@@ -117,7 +125,7 @@ local function isKiller(plr)
     for _, item in pairs(char:GetChildren()) do
         if item:IsA("Tool") then
             local n = string.lower(item.Name)
-            if n:find("knife") or n:find("weapon") or n:find("kill") then return true end
+            if n:find("knife") or n:find("weapon") or n:find("kill") or n:find("scythe") or n:find("blade") then return true end
         end
     end
     return false
@@ -125,13 +133,13 @@ end
 
 local function isGenerator(obj)
     local n = string.lower(obj.Name)
-    return n:find("generator") or n:find("gen") or n:find("fuel") or n:find("power")
+    return n:find("generator") or n:find("genpoint") or n:find("gen invis")
 end
 
 local function isItem(obj)
     local n = string.lower(obj.Name)
-    return n:find("key") or n:find("medkit") or n:find("item") or n:find("pickup") 
-        or n:find("coin") or n:find("gem") or n:find("crystal") or n:find("battery") or n:find("fuse")
+    return n:find("medkit") or n:find("med") or n:find("bandage") or n:find("toolbox") 
+        or n:find("flashlight") or n:find("key") or n:find("battery") or n:find("pickup")
 end
 
 --==============================================================
@@ -166,7 +174,7 @@ create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = TopBar })
 create("TextLabel", {
     Parent = TopBar, BackgroundTransparency = 1,
     Size = UDim2.new(1, -120, 1, 0), Position = UDim2.new(0, 15, 0, 0),
-    Font = Enum.Font.GothamBold, Text = "⚡ BOLONG HUB v3.0 ⚡",
+    Font = Enum.Font.GothamBold, Text = "⚡ BOLONG HUB v3.2 ⚡",
     TextColor3 = Color3.fromRGB(200, 180, 255), TextSize = 18,
     TextXAlignment = Enum.TextXAlignment.Left,
 })
@@ -384,8 +392,9 @@ local function CreateTextBox(parent, placeholder, callback)
     return Box
 end
 
+
 --==============================================================
--- TABS (Split Survivor & Killer)
+-- TABS
 --==============================================================
 local SurvivorTab = CreateTab("Survivor", "🏃")
 local KillerTab = CreateTab("Killer", "🔪")
@@ -431,7 +440,7 @@ CreateButton(SurvivorTab, "💨 DASH NOW", function()
     end
 end)
 CreateSlider(SurvivorTab, "Dash Duration (s)", 1, 5, 1, function(v) Config.SpeedBurst.Duration = v end)
-CreateToggle(SurvivorTab, "Auto Dodge (kabur dari killer)", false, function(s) Config.AutoDodge.Enabled = s end)
+CreateToggle(SurvivorTab, "Auto Dodge", false, function(s) Config.AutoDodge.Enabled = s end)
 CreateSlider(SurvivorTab, "Dodge Radius", 10, 100, 30, function(v) Config.AutoDodge.Radius = v end)
 CreateToggle(SurvivorTab, "Invisible", false, function(s)
     Config.Invisible.Enabled = s
@@ -450,9 +459,17 @@ CreateSlider(SurvivorTab, "Invisibility Level", 0.5, 1, 0.9, function(v) Config.
 CreateToggle(SurvivorTab, "Auto Heal", false, function(s) Config.AutoHeal.Enabled = s end)
 CreateSlider(SurvivorTab, "Heal Threshold", 10, 90, 30, function(v) Config.AutoHeal.Threshold = v end)
 
-CreateSection(SurvivorTab, "🔧 SURVIVOR - REPAIR")
-CreateToggle(SurvivorTab, "✨ Auto Perfect Repair", false, function(s)
-    Config.AutoPerfectRepair.Enabled = s
+CreateSection(SurvivorTab, "🔧 SURVIVOR - REPAIR (VIOLENCE DISTRICT)")
+CreateToggle(SurvivorTab, "✨ Auto Perfect Skill Check", false, function(s)
+    Config.AutoPerfectSkillCheck.Enabled = s
+    StarterGui:SetCore("SendNotification", {
+        Title = "Auto Perfect",
+        Text = s and "✅ AKTIF - Skill check auto perfect!" or "❌ MATI",
+        Duration = 2,
+    })
+end)
+CreateToggle(SurvivorTab, "🚫 No Skill Check", false, function(s)
+    Config.NoSkillCheck.Enabled = s
 end)
 CreateButton(SurvivorTab, "Reset Character", function()
     local c = getChar(); if c then c:BreakJoints() end
@@ -462,24 +479,14 @@ end)
 -- KILLER TAB
 --==============================================================
 CreateSection(KillerTab, "🔪 KILLER - OFFENSE")
-CreateToggle(KillerTab, "Auto Hit (hit survivor terdekat)", false, function(s)
-    Config.AutoHit.Enabled = s
-end)
+CreateToggle(KillerTab, "Auto Hit", false, function(s) Config.AutoHit.Enabled = s end)
 CreateSlider(KillerTab, "Auto Hit Radius", 5, 50, 15, function(v) Config.AutoHit.Radius = v end)
-
-CreateToggle(KillerTab, "Kill Aura (damage area)", false, function(s)
-    Config.KillAura.Enabled = s
-end)
+CreateToggle(KillerTab, "Kill Aura", false, function(s) Config.KillAura.Enabled = s end)
 CreateSlider(KillerTab, "Kill Aura Radius", 5, 50, 20, function(v) Config.KillAura.Radius = v end)
-
-CreateToggle(KillerTab, "Silent Aim (auto lock)", false, function(s)
-    Config.SilentAim.Enabled = s
-end)
+CreateToggle(KillerTab, "Silent Aim", false, function(s) Config.SilentAim.Enabled = s end)
 
 CreateSection(KillerTab, "🎯 KILLER - TRACKING")
-CreateToggle(KillerTab, "Track Survivor (highlight warna hijau)", true, function(s)
-    Config.ESP.SurvivorTracker = s
-end)
+CreateToggle(KillerTab, "Track Survivor (highlight hijau)", true, function(s) Config.ESP.SurvivorTracker = s end)
 
 CreateSection(KillerTab, "⚔️ KILLER - COMBAT")
 CreateToggle(KillerTab, "Hitbox Expander", false, function(s)
@@ -515,15 +522,16 @@ CreateToggle(ESPTab, "Distance ESP", true, function(s) Config.ESP.Distance = s e
 CreateToggle(ESPTab, "Line ESP", true, function(s) Config.ESP.Line = s end)
 CreateToggle(ESPTab, "Head Dot", true, function(s) Config.ESP.HeadDot = s end)
 CreateToggle(ESPTab, "Team Check", true, function(s) Config.ESP.TeamCheck = s end)
-CreateToggle(ESPTab, "🎯 Killer Tracker (survivor mode)", true, function(s) Config.ESP.KillerTracker = s end)
+CreateToggle(ESPTab, "🎯 Killer Tracker", true, function(s) Config.ESP.KillerTracker = s end)
 CreateSlider(ESPTab, "Max Distance Player", 100, 5000, 1000, function(v) Config.ESP.MaxDistance = v end)
 
-CreateSection(ESPTab, "📦 ESP - GENERATOR (SURVIVAL)")
+CreateSection(ESPTab, "⚡ ESP - GENERATOR (VIOLENCE DISTRICT)")
 CreateToggle(ESPTab, "Generator ESP", true, function(s) Config.ESP.GeneratorESP = s end)
-CreateSlider(ESPTab, "Generator Max Radius", 50, 2000, 300, function(v) Config.ESP.GeneratorRadius = v end)
+CreateSlider(ESPTab, "Generator Max Radius", 50, 2000, 400, function(v) Config.ESP.GeneratorRadius = v end)
+CreateSlider(ESPTab, "Max Generator Tampil", 1, 15, 5, function(v) Config.ESP.GeneratorMaxShow = v end)
 
 CreateSection(ESPTab, "🎁 ESP - ITEM")
-CreateToggle(ESPTab, "Item ESP", true, function(s) Config.ESP.ItemESP = s end)
+CreateToggle(ESPTab, "Item ESP (medkit, toolbox, dll)", true, function(s) Config.ESP.ItemESP = s end)
 
 CreateSection(ESPTab, "🚨 ALERT")
 CreateToggle(ESPTab, "Killer Alert", false, function(s) Config.KillerAlert.Enabled = s end)
@@ -545,8 +553,8 @@ end)
 CreateToggle(TeleportTab, "Click Teleport", false, function(s) Config.ClickTP = s end)
 CreateButton(TeleportTab, "TP ke Spawn", function()
     local hrp = getHRP()
-    if hrp and workspace:FindFirstChild("SpawnLocation") then
-        hrp.CFrame = workspace.SpawnLocation.CFrame + Vector3.new(0, 5, 0)
+    if hrp and Workspace:FindFirstChild("SpawnLocation") then
+        hrp.CFrame = Workspace.SpawnLocation.CFrame + Vector3.new(0, 5, 0)
     end
 end)
 CreateButton(TeleportTab, "TP ke 0,0,0", function()
@@ -616,7 +624,7 @@ CreateToggle(MiscTab, "Map Reveal", false, function(s)
     Config.MapReveal.Enabled = s
     if s then
         Lighting.FogEnd = 1e6; Lighting.FogStart = 1e6
-        for _, obj in pairs(workspace:GetDescendants()) do
+        for _, obj in pairs(Workspace:GetDescendants()) do
             if obj:IsA("Atmosphere") then obj.Density = 0 end
         end
     end
@@ -643,13 +651,13 @@ end)
 --==============================================================
 -- CREDIT TAB
 --==============================================================
-CreateSection(CreditTab, "💜 BOLONG HUB v3.0")
+CreateSection(CreditTab, "💜 BOLONG HUB v3.2")
 for _, t in pairs({
-    "Survivor vs Killer Edition",
+    "Violence District Edition",
     "Made with ❤️ by AmbaGpt",
     "For: Sayang ❤️",
     "Repo: redfingernew25-pixel/Bolong-hub",
-    "70+ Fitur Aktif",
+    "75+ Fitur Aktif",
 }) do
     create("TextLabel", {
         Parent = CreditTab, BackgroundTransparency = 1,
@@ -661,66 +669,195 @@ for _, t in pairs({
 end
 
 --==============================================================
--- GENERATOR TRACKER
+-- GENERATOR TRACKER (Violence District Edition)
 --==============================================================
 local Generators = {}
 
 local function findGenerators()
     local found = {}
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if isGenerator(obj) then
-            local pos, name
-            if obj:IsA("BasePart") then
-                pos = obj.Position; name = obj.Name
-            elseif obj:IsA("Model") then
-                local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                if p then pos = p.Position; name = obj.Name end
-            end
-            if pos then
-                table.insert(found, { Obj = obj, Position = pos, Name = name })
+    local seen = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        local n = string.lower(obj.Name)
+        if (n:find("generator") or n:find("genpoint") or n:find("gen invis")) and not seen[obj] then
+            -- Skip parent model "Generator" doang (biar ga duplikat sama point-nya)
+            if not (obj:IsA("Model") and string.lower(obj.Name) == "generator") then
+                local pos, name
+                if obj:IsA("BasePart") then
+                    pos = obj.Position; name = obj.Name
+                elseif obj:IsA("Model") or obj:IsA("Folder") then
+                    local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                    if p then pos = p.Position; name = obj.Name end
+                end
+                if pos then
+                    seen[obj] = true
+                    table.insert(found, { Obj = obj, Position = pos, Name = name })
+                end
             end
         end
     end
     return found
 end
 
--- Update list generator tiap 5 detik
+Generators = findGenerators()
 task.spawn(function()
     while task.wait(5) do
         Generators = findGenerators()
     end
 end)
-Generators = findGenerators()
 
--- Deteksi progress generator
+--==============================================================
+-- GENERATOR PROGRESS (Multi-Method)
+--==============================================================
 local function getGeneratorProgress(gen)
     local obj = gen.Obj
-    -- Coba cari value/progress di objek
+    -- Method 1: Attribute
+    for _, attr in pairs({"Progress", "RepairProgress", "Value", "Percent", "Fill", "Repair", "GenProgress"}) do
+        local ok, val = pcall(function() return obj:GetAttribute(attr) end)
+        if ok and type(val) == "number" then
+            if val <= 1 and val > 0 then return math.floor(val * 100) end
+            return math.floor(val)
+        end
+    end
+    -- Method 2: NumberValue/IntValue child
     for _, child in pairs(obj:GetDescendants()) do
         if child:IsA("NumberValue") or child:IsA("IntValue") then
             local n = string.lower(child.Name)
-            if n:find("progress") or n:find("percent") or n:find("value") or n:find("fill") then
-                return child.Value
+            if n:find("progress") or n:find("percent") or n:find("repair") or n:find("value") then
+                local val = child.Value
+                if val <= 1 and val > 0 then return math.floor(val * 100) end
+                return math.floor(val)
             end
+        end
+    end
+    -- Method 3: GUI Fill Bar
+    for _, child in pairs(obj:GetDescendants()) do
+        if child:IsA("Frame") and (string.lower(child.Name):find("fill") or string.lower(child.Name):find("bar") or string.lower(child.Name):find("progress")) then
+            local size = child.Size.X.Scale
+            if size > 0 then return math.floor(size * 100) end
         end
     end
     return nil
 end
 
--- Deteksi player yang repair generator
+--==============================================================
+-- DETEKSI PLAYER YANG REPAIR (Misa P=X format)
+--==============================================================
 local function getRepairingPlayers(gen)
     local repairing = {}
     local genPos = gen.Position
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
             local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            if hrp and (hrp.Position - genPos).Magnitude < 8 then
-                table.insert(repairing, plr.Name)
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum then
+                local dist = (hrp.Position - genPos).Magnitude
+                if dist < 10 then
+                    local isRepairing = false
+                    -- Cek tool repair
+                    local tool = plr.Character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        local tn = string.lower(tool.Name)
+                        if tn:find("repair") or tn:find("tool") or tn:find("wrench") then
+                            isRepairing = true
+                        end
+                    end
+                    -- Cek humanoid state (diem)
+                    if hum.WalkSpeed < 5 or hum.MoveDirection.Magnitude < 0.1 then
+                        isRepairing = true
+                    end
+                    -- Kalau deket banget, auto anggap
+                    if dist < 6 then
+                        isRepairing = true
+                    end
+                    if isRepairing then
+                        table.insert(repairing, plr.Name)
+                    end
+                end
             end
         end
     end
     return repairing
 end
+
+--==============================================================
+-- AUTO PERFECT SKILL CHECK (Violence District)
+--==============================================================
+local repairRemotes = {}
+local skillCheckGuis = {}
+
+task.spawn(function()
+    while task.wait(1) do
+        repairRemotes = {}
+        skillCheckGuis = {}
+        -- Cari remote
+        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+            if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+                local n = string.lower(remote.Name)
+                if n:find("skill") or n:find("perfect") or n:find("repair") or n:find("generator") or n:find("check") or n:find("hit") then
+                    table.insert(repairRemotes, remote)
+                end
+            end
+        end
+        -- Cari GUI skill check di PlayerGui
+        for _, obj in pairs(PlayerGui:GetDescendants()) do
+            if obj:IsA("ScreenGui") or obj:IsA("Frame") then
+                local n = string.lower(obj.Name)
+                if n:find("skill") or n:find("check") or n:find("generator") then
+                    table.insert(skillCheckGuis, obj)
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.05) do
+        if Config.AutoPerfectSkillCheck.Enabled then
+            -- Method 1: Fire remote
+            for _, remote in pairs(repairRemotes) do
+                pcall(function()
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer(true)
+                        remote:FireServer("perfect")
+                        remote:FireServer(1)
+                        remote:FireServer(100)
+                    elseif remote:IsA("RemoteFunction") then
+                        pcall(function() remote:InvokeServer("perfect") end)
+                        pcall(function() remote:InvokeServer(true) end)
+                        pcall(function() remote:InvokeServer(1) end)
+                    end
+                end)
+            end
+            -- Method 2: Auto klik GUI skill check
+            for _, gui in pairs(skillCheckGuis) do
+                for _, btn in pairs(gui:GetDescendants()) do
+                    if btn:IsA("TextButton") or btn:IsA("ImageButton") then
+                        pcall(function()
+                            btn.MouseButton1Click:Fire()
+                            btn.MouseButton1Down:Fire()
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- No Skill Check (hapus GUI skill check dari PlayerGui)
+task.spawn(function()
+    while task.wait(0.1) do
+        if Config.NoSkillCheck.Enabled then
+            for _, obj in pairs(PlayerGui:GetDescendants()) do
+                if obj:IsA("ScreenGui") then
+                    local n = string.lower(obj.Name)
+                    if n:find("skill") or n:find("check") then
+                        pcall(function() obj.Enabled = false end)
+                    end
+                end
+            end
+        end
+    end
+end)
 
 --==============================================================
 -- MAIN LOOPS
@@ -747,7 +884,7 @@ RunService.RenderStepped:Connect(function()
         local hrp = getHRP()
         if hrp then
             if not flyBV or not flyBG then startFly() end
-            local cam = workspace.CurrentCamera
+            local cam = Workspace.CurrentCamera
             local dir = Vector3.new(0, 0, 0)
             if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
@@ -831,34 +968,12 @@ task.spawn(function()
                 local bp = LocalPlayer:FindFirstChild("Backpack")
                 if bp then
                     for _, tool in pairs(bp:GetChildren()) do
-                        if tool:IsA("Tool") and (string.lower(tool.Name):find("med") or string.lower(tool.Name):find("heal")) then
+                        if tool:IsA("Tool") and (string.lower(tool.Name):find("med") or string.lower(tool.Name):find("heal") or string.lower(tool.Name):find("bandage")) then
                             tool.Parent = getChar(); tool:Activate(); break
                         end
                     end
                 end
             end
-        end
-    end
-end)
-
--- AUTO PERFECT REPAIR (deteksi interaksi repair)
-task.spawn(function()
-    while task.wait(0.5) do
-        if Config.AutoPerfectRepair.Enabled then
-            pcall(function()
-                -- Cari remote yang berkaitan dengan repair
-                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                    if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-                        local n = string.lower(remote.Name)
-                        if n:find("repair") or n:find("fix") or n:find("perfect") then
-                            -- Kirim value perfect (biasanya 1 atau 100)
-                            pcall(function() remote:FireServer(1) end)
-                            pcall(function() remote:FireServer(100) end)
-                            pcall(function() remote:InvokeServer(1) end)
-                        end
-                    end
-                end
-            end)
         end
     end
 end)
@@ -874,7 +989,6 @@ task.spawn(function()
                         local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
                         if hrp and (myHrp.Position - hrp.Position).Magnitude < Config.AutoHit.Radius then
                             pcall(function()
-                                -- Kirim hit ke server
                                 local tool = getChar() and getChar():FindFirstChildOfClass("Tool")
                                 if tool then tool:Activate() end
                             end)
@@ -940,7 +1054,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
         local params = RaycastParams.new()
         params.FilterDescendantsInstances = {getChar()}
         params.FilterType = Enum.RaycastFilterType.Exclude
-        local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+        local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
         if result then
             local hrp = getHRP()
             if hrp then hrp.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0)) end
@@ -982,7 +1096,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --==============================================================
--- ESP SYSTEM
+-- ESP SYSTEM (Player + Generator + Item)
 --==============================================================
 local espObjs = {}
 local itemESPObjs = {}
@@ -1112,39 +1226,60 @@ RunService.RenderStepped:Connect(function()
         end)
     end
 
-    -- GENERATOR ESP
+    -- GENERATOR ESP (Format: ⚡ Nama [jarak] progress% | Misa P=X (nama1, nama2))
     if Config.ESP.GeneratorESP then
+        local sortedGens = {}
         for i, gen in pairs(Generators) do
+            local dist = (Camera.CFrame.Position - gen.Position).Magnitude
+            if dist <= Config.ESP.GeneratorRadius then
+                table.insert(sortedGens, { Gen = gen, Dist = dist })
+            end
+        end
+        table.sort(sortedGens, function(a, b) return a.Dist < b.Dist end)
+
+        for i, entry in pairs(sortedGens) do
+            local gen = entry.Gen
+            local dist = entry.Dist
+            local pos = gen.Position
             pcall(function()
-                local pos = gen.Position
-                local dist = (Camera.CFrame.Position - pos).Magnitude
-                if dist > Config.ESP.GeneratorRadius then
-                    if genESPObjs[gen.Obj] then
-                        for _, d in pairs(genESPObjs[gen.Obj]) do d.Visible = false end
-                    end
-                else
-                    if not genESPObjs[gen.Obj] then
-                        local tag = Drawing.new("Text")
-                        tag.Visible = false; tag.Size = 13; tag.Center = true
-                        tag.Outline = true; tag.Font = 2
-                        genESPObjs[gen.Obj] = { Tag = tag }
-                    end
-                    local sp, onScr = Camera:WorldToViewportPoint(pos)
-                    local t = genESPObjs[gen.Obj]
-                    if t and onScr then
+                if not genESPObjs[gen.Obj] then
+                    local tag = Drawing.new("Text")
+                    tag.Visible = false; tag.Size = 13; tag.Center = true
+                    tag.Outline = true; tag.Font = 2
+                    genESPObjs[gen.Obj] = { Tag = tag }
+                end
+                local sp, onScr = Camera:WorldToViewportPoint(pos)
+                local t = genESPObjs[gen.Obj]
+                if t and onScr then
+                    if i <= Config.ESP.GeneratorMaxShow then
                         local progress = getGeneratorProgress(gen)
                         local repairing = getRepairingPlayers(gen)
-                        local progStr = progress and (tostring(math.floor(progress)) .. "%") or "??"
-                        local repairStr = #repairing > 0 and (" 👥" .. #repairing .. " (" .. table.concat(repairing, ",") .. ")") or ""
+                        local progStr = progress and (progress .. "%") or "0%"
+                        local repairStr = ""
+                        if #repairing > 0 then
+                            repairStr = " | Misa P=" .. #repairing .. " (" .. table.concat(repairing, ", ") .. ")"
+                        end
                         t.Tag.Position = Vector2.new(sp.X, sp.Y)
                         t.Tag.Text = "⚡ " .. gen.Name .. " [" .. math.floor(dist) .. "m] " .. progStr .. repairStr
                         t.Tag.Color = Config.ESP.GeneratorColor
                         t.Tag.Visible = true
-                    elseif t then
+                    else
                         t.Tag.Visible = false
                     end
+                elseif t then
+                    t.Tag.Visible = false
                 end
             end)
+        end
+        -- Hide yang ga ke-sort
+        for obj, o in pairs(genESPObjs) do
+            local found = false
+            for _, entry in pairs(sortedGens) do
+                if entry.Gen.Obj == obj then found = true; break end
+            end
+            if not found then
+                for _, d in pairs(o) do pcall(function() d.Visible = false end) end
+            end
         end
     else
         for _, o in pairs(genESPObjs) do
@@ -1154,7 +1289,7 @@ RunService.RenderStepped:Connect(function()
 
     -- ITEM ESP
     if Config.ESP.ItemESP then
-        for _, obj in pairs(workspace:GetDescendants()) do
+        for _, obj in pairs(Workspace:GetDescendants()) do
             if isItem(obj) and not isGenerator(obj) then
                 local pos
                 if obj:IsA("BasePart") then pos = obj.Position
@@ -1193,7 +1328,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Init existing players
+-- Init existing
 for _, plr in pairs(Players:GetPlayers()) do
     if plr ~= LocalPlayer then createESP(plr) end
 end
@@ -1207,12 +1342,13 @@ LocalPlayer.CharacterAdded:Connect(function(c)
 end)
 
 --==============================================================
--- NOTIF
+-- NOTIF LOAD
 --==============================================================
 StarterGui:SetCore("SendNotification", {
-    Title = "⚡ BOLONG HUB v3.0",
-    Text = "Survivor vs Killer Edition! 70+ fitur ❤️",
+    Title = "⚡ BOLONG HUB v3.2",
+    Text = "Violence District Edition! 75+ fitur ❤️",
     Duration = 5,
 })
 
-print("[BOLONG HUB v3.0] Loaded! Repo: redfingernew25-pixel/Bolong-hub")
+print("[BOLONG HUB v3.2] Loaded! Repo: redfingernew25-pixel/Bolong-hub")
+print("[BOLONG HUB] Violence District Edition")
