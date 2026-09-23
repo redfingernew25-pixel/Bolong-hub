@@ -658,7 +658,7 @@ for _, t in pairs({
 end
 
 --==============================================================
--- GENERATOR TRACKER
+-- GENERATOR TRACKER (SIMPLE - v3.2.3)
 --==============================================================
 local Generators = {}
 
@@ -667,19 +667,17 @@ local function findGenerators()
     local seen = {}
     for _, obj in pairs(Workspace:GetDescendants()) do
         local n = string.lower(obj.Name)
-        if (n:find("generator") or n:find("genpoint") or n:find("gen invis")) and not seen[obj] then
-            if not (obj:IsA("Model") and string.lower(obj.Name) == "generator") then
-                local pos, name
-                if obj:IsA("BasePart") then
-                    pos = obj.Position; name = obj.Name
-                elseif obj:IsA("Model") or obj:IsA("Folder") then
-                    local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                    if p then pos = p.Position; name = obj.Name end
-                end
-                if pos then
-                    seen[obj] = true
-                    table.insert(found, { Obj = obj, Position = pos, Name = name })
-                end
+        if n:find("generatorpoint") and not seen[obj] then
+            local pos, name
+            if obj:IsA("BasePart") then
+                pos = obj.Position; name = obj.Name
+            elseif obj:IsA("Model") or obj:IsA("Folder") then
+                local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                if p then pos = p.Position; name = obj.Name end
+            end
+            if pos then
+                seen[obj] = true
+                table.insert(found, { Obj = obj, Position = pos, Name = name })
             end
         end
     end
@@ -693,68 +691,31 @@ task.spawn(function()
     end
 end)
 
---==============================================================
--- GENERATOR PROGRESS
---==============================================================
+-- Ambil progress generator (simple)
 local function getGeneratorProgress(gen)
     local obj = gen.Obj
-    for _, attr in pairs({"Progress", "RepairProgress", "Value", "Percent", "Fill", "Repair", "GenProgress"}) do
-        local ok, val = pcall(function() return obj:GetAttribute(attr) end)
-        if ok and type(val) == "number" then
-            if val <= 1 and val > 0 then return math.floor(val * 100) end
-            return math.floor(val)
-        end
-    end
     for _, child in pairs(obj:GetDescendants()) do
         if child:IsA("NumberValue") or child:IsA("IntValue") then
             local n = string.lower(child.Name)
-            if n:find("progress") or n:find("percent") or n:find("repair") or n:find("value") then
+            if n:find("progress") or n:find("percent") or n:find("value") then
                 local val = child.Value
                 if val <= 1 and val > 0 then return math.floor(val * 100) end
                 return math.floor(val)
             end
         end
     end
-    for _, child in pairs(obj:GetDescendants()) do
-        if child:IsA("Frame") and (string.lower(child.Name):find("fill") or string.lower(child.Name):find("bar") or string.lower(child.Name):find("progress")) then
-            local size = child.Size.X.Scale
-            if size > 0 then return math.floor(size * 100) end
-        end
-    end
-    return nil
+    return 0
 end
 
---==============================================================
--- DETEKSI PLAYER YANG REPAIR (Misa P=X)
---==============================================================
+-- Deteksi player repair
 local function getRepairingPlayers(gen)
     local repairing = {}
     local genPos = gen.Position
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
             local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum then
-                local dist = (hrp.Position - genPos).Magnitude
-                if dist < 10 then
-                    local isRepairing = false
-                    local tool = plr.Character:FindFirstChildOfClass("Tool")
-                    if tool then
-                        local tn = string.lower(tool.Name)
-                        if tn:find("repair") or tn:find("tool") or tn:find("wrench") then
-                            isRepairing = true
-                        end
-                    end
-                    if hum.WalkSpeed < 5 or hum.MoveDirection.Magnitude < 0.1 then
-                        isRepairing = true
-                    end
-                    if dist < 6 then
-                        isRepairing = true
-                    end
-                    if isRepairing then
-                        table.insert(repairing, plr.Name)
-                    end
-                end
+            if hrp and (hrp.Position - genPos).Magnitude < 8 then
+                table.insert(repairing, plr.Name)
             end
         end
     end
@@ -762,372 +723,19 @@ local function getRepairingPlayers(gen)
 end
 
 --==============================================================
--- AUTO PERFECT SKILL CHECK v3 (Multi-Method Aggressive)
---==============================================================
-local repairRemotes = {}
-local skillCheckGuis = {}
-local remoteDebug = false
-
--- Scan remote tiap 2 detik
-task.spawn(function()
-    while task.wait(2) do
-        repairRemotes = {}
-        skillCheckGuis = {}
-        
-        -- Scan ReplicatedStorage
-        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-            if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-                local n = string.lower(remote.Name)
-                if n:find("skill") or n:find("perfect") or n:find("repair") 
-                    or n:find("generator") or n:find("check") or n:find("hit")
-                    or n:find("qte") or n:find("minigame") or n:find("zone")
-                    or n:find("progress") or n:find("complete") then
-                    table.insert(repairRemotes, remote)
-                end
-            end
-        end
-        
-        -- Scan PlayerGui
-        for _, obj in pairs(PlayerGui:GetDescendants()) do
-            if obj:IsA("ScreenGui") or obj:IsA("Frame") then
-                local n = string.lower(obj.Name)
-                if n:find("skill") or n:find("check") or n:find("generator") 
-                    or n:find("qte") or n:find("minigame") or n:find("progress") then
-                    table.insert(skillCheckGuis, obj)
-                end
-            end
-        end
-        
-        -- Scan Workspace (kadang remote di dalam part)
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                local n = string.lower(obj.Name)
-                if n:find("skill") or n:find("perfect") or n:find("repair") then
-                    table.insert(repairRemotes, obj)
-                end
-            end
-        end
-        
-        if #repairRemotes > 0 and not remoteDebug then
-            remoteDebug = true
-            print("[BOLONG HUB] Found " .. #repairRemotes .. " repair remotes:")
-            for _, r in pairs(repairRemotes) do
-                print("  - " .. r:GetFullName())
-            end
-        end
-    end
-end)
-
--- Loop auto perfect
-task.spawn(function()
-    while task.wait(0.03) do
-        if Config.AutoPerfectSkillCheck.Enabled then
-            -- Method 1: Fire semua remote
-            for _, remote in pairs(repairRemotes) do
-                pcall(function()
-                    if remote:IsA("RemoteEvent") then
-                        remote:FireServer(true)
-                        remote:FireServer("perfect")
-                        remote:FireServer(1)
-                        remote:FireServer(100)
-                        remote:FireServer("hit")
-                        remote:FireServer("complete")
-                    elseif remote:IsA("RemoteFunction") then
-                        pcall(function() remote:InvokeServer("perfect") end)
-                        pcall(function() remote:InvokeServer(true) end)
-                        pcall(function() remote:InvokeServer(1) end)
-                        pcall(function() remote:InvokeServer(100) end)
-                    end
-                end)
-            end
-            
-            -- Method 2: Auto klik semua button di GUI skill check
-            for _, gui in pairs(skillCheckGuis) do
-                pcall(function()
-                    for _, btn in pairs(gui:GetDescendants()) do
-                        if btn:IsA("TextButton") or btn:IsA("ImageButton") then
-                            pcall(function() btn.MouseButton1Click:Fire() end)
-                            pcall(function() btn.MouseButton1Down:Fire() end)
-                            pcall(function() btn.Activated:Fire() end)
-                            pcall(function() btn:Activate() end)
-                        end
-                    end
-                end)
-            end
-            
-            -- Method 3: Simulate Space key + F key (kadang skill check pake ini)
-            pcall(function()
-                local VIM = game:GetService("VirtualInputManager")
-                VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                task.wait(0.01)
-                VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-                VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-                task.wait(0.01)
-                VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-            end)
-        end
-    end
-end)
-
--- No Skill Check (hide GUI)
-task.spawn(function()
-    while task.wait(0.1) do
-        if Config.NoSkillCheck.Enabled then
-            for _, obj in pairs(PlayerGui:GetDescendants()) do
-                if obj:IsA("ScreenGui") then
-                    local n = string.lower(obj.Name)
-                    if n:find("skill") or n:find("check") or n:find("qte") then
-                        pcall(function() obj.Enabled = false end)
-                    end
-                end
-            end
-        end
-    end
-end)
-
---==============================================================
--- MAIN LOOPS
---==============================================================
-local flyBV, flyBG
-local function startFly()
-    local hrp, hum = getHRP(), getHum()
-    if not hrp or not hum then return end
-    hum.PlatformStand = true
-    if flyBV then flyBV:Destroy() end
-    if flyBG then flyBG:Destroy() end
-    flyBV = Instance.new("BodyVelocity", hrp)
-    flyBV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    flyBV.Velocity = Vector3.new(0, 0, 0)
-    flyBG = Instance.new("BodyGyro", hrp)
-    flyBG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    flyBG.P = 1000; flyBG.D = 50
-    flyBG.CFrame = hrp.CFrame
-end
-
-RunService.RenderStepped:Connect(function()
-    if Config.Fly.Enabled then
-        local hrp = getHRP()
-        if hrp then
-            if not flyBV or not flyBG then startFly() end
-            local cam = Workspace.CurrentCamera
-            local dir = Vector3.new(0, 0, 0)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0, 1, 0) end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.new(0, 1, 0) end
-            flyBV.Velocity = dir.Magnitude > 0 and dir.Unit * Config.Fly.Speed or Vector3.new(0, 0, 0)
-            flyBG.CFrame = cam.CFrame
-        end
-    else
-        if flyBV then flyBV:Destroy(); flyBV = nil end
-        if flyBG then flyBG:Destroy(); flyBG = nil end
-    end
-    if Config.Speed.Enabled then
-        local h = getHum()
-        if h and h.WalkSpeed ~= Config.Speed.Value then h.WalkSpeed = Config.Speed.Value end
-    end
-    if Config.Noclip.Enabled then
-        local c = getChar()
-        if c then
-            for _, part in pairs(c:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
-            end
-        end
-    end
-    if Config.HitboxExpand then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    hrp.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
-                    hrp.Transparency = 0.7
-                    hrp.CanCollide = false
-                end
-            end
-        end
-    end
-end)
-
-UserInputService.JumpRequest:Connect(function()
-    if Config.InfJump.Enabled then
-        local h = getHum(); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
-    end
-end)
-task.spawn(function()
-    while task.wait(0.1) do
-        if Config.BunnyHop.Enabled then
-            local h = getHum(); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(0.2) do
-        if Config.AutoDodge.Enabled then
-            local myHrp = getHRP()
-            if myHrp then
-                for _, plr in pairs(Players:GetPlayers()) do
-                    if plr ~= LocalPlayer and isKiller(plr) and plr.Character then
-                        local kHrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                        if kHrp and (myHrp.Position - kHrp.Position).Magnitude < Config.AutoDodge.Radius then
-                            local dir = (myHrp.Position - kHrp.Position).Unit
-                            myHrp.CFrame = CFrame.new(myHrp.Position + dir * 50)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(1) do
-        if Config.AutoHeal.Enabled then
-            local h = getHum()
-            if h and h.Health < Config.AutoHeal.Threshold and h.Health > 0 then
-                local bp = LocalPlayer:FindFirstChild("Backpack")
-                if bp then
-                    for _, tool in pairs(bp:GetChildren()) do
-                        if tool:IsA("Tool") and (string.lower(tool.Name):find("med") or string.lower(tool.Name):find("heal") or string.lower(tool.Name):find("bandage")) then
-                            tool.Parent = getChar(); tool:Activate(); break
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(0.3) do
-        if Config.AutoHit.Enabled then
-            local myHrp = getHRP()
-            if myHrp then
-                for _, plr in pairs(Players:GetPlayers()) do
-                    if plr ~= LocalPlayer and not isKiller(plr) and plr.Character then
-                        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                        if hrp and (myHrp.Position - hrp.Position).Magnitude < Config.AutoHit.Radius then
-                            pcall(function()
-                                local tool = getChar() and getChar():FindFirstChildOfClass("Tool")
-                                if tool then tool:Activate() end
-                            end)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(0.3) do
-        if Config.KillAura.Enabled then
-            local myHrp = getHRP()
-            if myHrp then
-                for _, plr in pairs(Players:GetPlayers()) do
-                    if plr ~= LocalPlayer and not isKiller(plr) and plr.Character then
-                        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                        if hrp and (myHrp.Position - hrp.Position).Magnitude < Config.KillAura.Radius then
-                            pcall(function()
-                                local tool = getChar() and getChar():FindFirstChildOfClass("Tool")
-                                if tool then tool:Activate() end
-                            end)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(1.5) do
-        if Config.KillerAlert.Enabled then
-            local myHrp = getHRP()
-            if myHrp then
-                for _, plr in pairs(Players:GetPlayers()) do
-                    if plr ~= LocalPlayer and isKiller(plr) and plr.Character then
-                        local kHrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                        if kHrp and (myHrp.Position - kHrp.Position).Magnitude < Config.KillerAlert.Radius then
-                            StarterGui:SetCore("SendNotification", {
-                                Title = "🚨 KILLER ALERT 🚨",
-                                Text = plr.Name .. " dalam radius " .. Config.KillerAlert.Radius,
-                                Duration = 2,
-                            })
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if Config.ClickTP and input.UserInputType == Enum.UserInputType.MouseButton1 then
-        local mousePos = UserInputService:GetMouseLocation()
-        local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
-        local params = RaycastParams.new()
-        params.FilterDescendantsInstances = {getChar()}
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-        if result then
-            local hrp = getHRP()
-            if hrp then hrp.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0)) end
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(60) do
-        if Config.AntiAFK.Enabled then
-            pcall(function()
-                VirtualUser:CaptureController()
-                VirtualUser:ClickButton1(Vector2.new())
-            end)
-        end
-    end
-end)
-
-local fovCircle = Drawing and Drawing.new("Circle") or nil
-if fovCircle then
-    fovCircle.Thickness = 2
-    fovCircle.Color = Color3.fromRGB(255, 50, 50)
-    fovCircle.Transparency = 1
-    fovCircle.NumSides = 64
-    fovCircle.Filled = false
-end
-RunService.RenderStepped:Connect(function()
-    if fovCircle then
-        if Config.FOVCircle then
-            fovCircle.Visible = true
-            fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-            fovCircle.Radius = Config.FOVRadius
-        else
-            fovCircle.Visible = false
-        end
-    end
-end)
-
---==============================================================
--- ESP SYSTEM v3.2.2 (BACK TO BASIC + GENERATOR ENHANCED)
+-- ESP SYSTEM v3.2.3 (SIMPLE + STABLE)
 --==============================================================
 local espObjs = {}
-local itemESPObjs = {}
 local genESPObjs = {}
 
 local function getESPColor(plr)
-    local color = Config.ESP.EnemyColor
     if isKiller(plr) and Config.ESP.KillerTracker then
-        color = Config.ESP.KillerColor
-    elseif not isKiller(plr) and Config.ESP.SurvivorTracker then
-        color = Config.ESP.SurvivorColor
-    elseif plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
-        color = Config.ESP.TeamColor
+        return Config.ESP.KillerColor
     end
-    return color
+    if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
+        return Config.ESP.TeamColor
+    end
+    return Config.ESP.EnemyColor
 end
 
 local function createESP(plr)
@@ -1169,12 +777,10 @@ for _, plr in pairs(Players:GetPlayers()) do
     if plr ~= LocalPlayer then createESP(plr) end
 end
 
+-- MAIN ESP LOOP
 RunService.RenderStepped:Connect(function()
     if not Config.ESP.Enabled then
         for _, o in pairs(espObjs) do
-            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
-        end
-        for _, o in pairs(itemESPObjs) do
             for _, d in pairs(o) do pcall(function() d.Visible = false end) end
         end
         for _, o in pairs(genESPObjs) do
@@ -1183,7 +789,7 @@ RunService.RenderStepped:Connect(function()
         return
     end
 
-    -- PLAYER ESP
+    -- ========== PLAYER ESP ==========
     for plr, o in pairs(espObjs) do
         pcall(function()
             local char = plr.Character
@@ -1248,7 +854,7 @@ RunService.RenderStepped:Connect(function()
             else o.Line.Visible = false end
 
             if Config.ESP.HeadDot and head then
-                local hp = Camera:WorldToViewportPoint(head.Position)
+                local hp = Camera.WorldToViewportPoint(Camera, head.Position)
                 o.HeadDot.Position = Vector2.new(hp.X, hp.Y)
                 o.HeadDot.Radius = 4
                 o.HeadDot.Color = col
@@ -1257,144 +863,42 @@ RunService.RenderStepped:Connect(function()
         end)
     end
 
-        -- GENERATOR ESP - BOX + PROGRESS BAR ONLY (No Text)
+    -- ========== GENERATOR ESP (SIMPLE TEXT) ==========
     if Config.ESP.GeneratorESP then
-        local sortedGens = {}
         for i, gen in pairs(Generators) do
-            local dist = (Camera.CFrame.Position - gen.Position).Magnitude
-            if dist <= Config.ESP.GeneratorRadius then
-                table.insert(sortedGens, { Gen = gen, Dist = dist })
-            end
-        end
-        table.sort(sortedGens, function(a, b) return a.Dist < b.Dist end)
-
-        for i, entry in pairs(sortedGens) do
             pcall(function()
-                local gen = entry.Gen
-                local dist = entry.Dist
                 local obj = gen.Obj
                 local pos = gen.Position
+                local dist = (Camera.CFrame.Position - pos).Magnitude
                 
-                -- Buat object ESP generator (box, progress bar bg, progress bar fill)
                 if not genESPObjs[obj] then
-                    local box = Drawing.new("Square")
-                    box.Visible = false; box.Thickness = 2; box.Filled = false
-                    box.Color = Color3.fromRGB(255, 220, 0)
-                    box.Transparency = 1
-                    
-                    local progBg = Drawing.new("Line")
-                    progBg.Visible = false; progBg.Thickness = 6
-                    progBg.Color = Color3.fromRGB(40, 40, 40)
-                    progBg.Transparency = 0.5
-                    
-                    local progFill = Drawing.new("Line")
-                    progFill.Visible = false; progFill.Thickness = 6
-                    progFill.Color = Color3.fromRGB(0, 255, 100)
-                    progFill.Transparency = 1
-                    
-                    genESPObjs[obj] = { Box = box, ProgBg = progBg, ProgFill = progFill }
+                    local tag = Drawing.new("Text")
+                    tag.Visible = false; tag.Size = 14; tag.Center = true
+                    tag.Outline = true; tag.Font = 2
+                    genESPObjs[obj] = { Tag = tag }
                 end
                 
-                local o = genESPObjs[obj]
+                local t = genESPObjs[obj]
                 local sp, onScr = Camera:WorldToViewportPoint(pos)
                 
-                if o and onScr and i <= Config.ESP.GeneratorMaxShow then
-                    -- Hitung size box berdasarkan jarak (perspektif)
-                    local size = math.clamp(300 / dist, 30, 200)
-                    
-                    -- BOX kuning
-                    o.Box.Size = Vector2.new(size, size)
-                    o.Box.Position = Vector2.new(sp.X - size/2, sp.Y - size/2)
-                    o.Box.Visible = true
-                    
-                    -- PROGRESS BAR di bawah box
+                if t and onScr and dist <= Config.ESP.GeneratorRadius then
                     local progress = getGeneratorProgress(gen)
-                    local prog = progress or 0
-                    
-                    local barX = sp.X - size/2
-                    local barY = sp.Y + size/2 + 8
-                    local barWidth = size
-                    
-                    -- Background bar
-                    o.ProgBg.From = Vector2.new(barX, barY)
-                    o.ProgBg.To = Vector2.new(barX + barWidth, barY)
-                    o.ProgBg.Visible = true
-                    
-                    -- Fill bar (sesuai progress)
-                    o.ProgFill.From = Vector2.new(barX, barY)
-                    o.ProgFill.To = Vector2.new(barX + (barWidth * (prog/100)), barY)
-                    o.ProgFill.Visible = true
-                    
-                    -- Warna fill: merah (rendah) → kuning → hijau (penuh)
-                    if prog < 30 then
-                        o.ProgFill.Color = Color3.fromRGB(255, 60, 60)
-                    elseif prog < 70 then
-                        o.ProgFill.Color = Color3.fromRGB(255, 200, 0)
-                    else
-                        o.ProgFill.Color = Color3.fromRGB(0, 255, 100)
+                    local repairing = getRepairingPlayers(gen)
+                    local repairStr = ""
+                    if #repairing > 0 then
+                        repairStr = " | Misa P=" .. #repairing .. " (" .. table.concat(repairing, ", ") .. ")"
                     end
-                else
-                    if o then
-                        o.Box.Visible = false
-                        o.ProgBg.Visible = false
-                        o.ProgFill.Visible = false
-                    end
+                    t.Tag.Position = Vector2.new(sp.X, sp.Y)
+                    t.Tag.Text = "⚡ Gen [" .. math.floor(dist) .. "m] " .. progress .. "%" .. repairStr
+                    t.Tag.Color = Color3.fromRGB(255, 220, 0)
+                    t.Tag.Visible = true
+                elseif t then
+                    t.Tag.Visible = false
                 end
             end)
         end
-
-        -- Hide yang ga masuk list
-        for obj, o in pairs(genESPObjs) do
-            local found = false
-            for _, entry in pairs(sortedGens) do
-                if entry.Gen.Obj == obj then found = true; break end
-            end
-            if not found then
-                for _, d in pairs(o) do pcall(function() d.Visible = false end) end
-            end
-        end
     else
         for _, o in pairs(genESPObjs) do
-            for _, d in pairs(o) do pcall(function() d.Visible = false end) end
-        end
-    end
-
-    -- ITEM ESP
-    if Config.ESP.ItemESP then
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if isItem(obj) and not isGenerator(obj) then
-                local pos
-                if obj:IsA("BasePart") then pos = obj.Position
-                elseif obj:IsA("Model") then
-                    local p = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                    if p then pos = p.Position end
-                end
-                if pos then
-                    if not itemESPObjs[obj] then
-                        pcall(function()
-                            local tag = Drawing.new("Text")
-                            tag.Visible = false; tag.Size = 12; tag.Center = true; tag.Outline = true; tag.Font = 2
-                            itemESPObjs[obj] = { Tag = tag }
-                        end)
-                    end
-                    local t = itemESPObjs[obj]
-                    if t then
-                        local sp, onScr = Camera:WorldToViewportPoint(pos)
-                        local dist = (Camera.CFrame.Position - pos).Magnitude
-                        if onScr and dist < Config.ESP.MaxDistance then
-                            t.Tag.Position = Vector2.new(sp.X, sp.Y)
-                            t.Tag.Text = "📦 " .. obj.Name .. " [" .. math.floor(dist) .. "m]"
-                            t.Tag.Color = Config.ESP.ItemColor
-                            t.Tag.Visible = true
-                        else
-                            t.Tag.Visible = false
-                        end
-                    end
-                end
-            end
-        end
-    else
-        for _, o in pairs(itemESPObjs) do
             for _, d in pairs(o) do pcall(function() d.Visible = false end) end
         end
     end
@@ -1405,6 +909,42 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     if Config.Speed.Enabled then
         local h = c:FindFirstChildOfClass("Humanoid")
         if h then h.WalkSpeed = Config.Speed.Value end
+    end
+end)
+
+--==============================================================
+-- AUTO PERFECT (VERSI SIMPLE - GA BIKIN CRASH)
+--==============================================================
+local repairRemotes = {}
+
+task.spawn(function()
+    while task.wait(3) do
+        repairRemotes = {}
+        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+            if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+                local n = string.lower(remote.Name)
+                if n:find("skill") or n:find("perfect") or n:find("repair") or n:find("hit") then
+                    table.insert(repairRemotes, remote)
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.1) do
+        if Config.AutoPerfectSkillCheck.Enabled then
+            for _, remote in pairs(repairRemotes) do
+                pcall(function()
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer(true)
+                        remote:FireServer(1)
+                    elseif remote:IsA("RemoteFunction") then
+                        pcall(function() remote:InvokeServer(true) end)
+                    end
+                end)
+            end
+        end
     end
 end)
 
