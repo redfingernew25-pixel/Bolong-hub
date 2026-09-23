@@ -762,34 +762,43 @@ local function getRepairingPlayers(gen)
 end
 
 --==============================================================
--- AUTO PERFECT SKILL CHECK
+-- AUTO PERFECT SKILL CHECK v3 (Multi-Method Aggressive)
 --==============================================================
 local repairRemotes = {}
 local skillCheckGuis = {}
+local remoteDebug = false
 
+-- Scan remote tiap 2 detik
 task.spawn(function()
     while task.wait(2) do
         repairRemotes = {}
         skillCheckGuis = {}
+        
+        -- Scan ReplicatedStorage
         for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
             if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
                 local n = string.lower(remote.Name)
                 if n:find("skill") or n:find("perfect") or n:find("repair") 
                     or n:find("generator") or n:find("check") or n:find("hit")
-                    or n:find("qte") or n:find("minigame") then
+                    or n:find("qte") or n:find("minigame") or n:find("zone")
+                    or n:find("progress") or n:find("complete") then
                     table.insert(repairRemotes, remote)
                 end
             end
         end
+        
+        -- Scan PlayerGui
         for _, obj in pairs(PlayerGui:GetDescendants()) do
             if obj:IsA("ScreenGui") or obj:IsA("Frame") then
                 local n = string.lower(obj.Name)
                 if n:find("skill") or n:find("check") or n:find("generator") 
-                    or n:find("qte") or n:find("minigame") then
+                    or n:find("qte") or n:find("minigame") or n:find("progress") then
                     table.insert(skillCheckGuis, obj)
                 end
             end
         end
+        
+        -- Scan Workspace (kadang remote di dalam part)
         for _, obj in pairs(Workspace:GetDescendants()) do
             if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
                 local n = string.lower(obj.Name)
@@ -798,12 +807,22 @@ task.spawn(function()
                 end
             end
         end
+        
+        if #repairRemotes > 0 and not remoteDebug then
+            remoteDebug = true
+            print("[BOLONG HUB] Found " .. #repairRemotes .. " repair remotes:")
+            for _, r in pairs(repairRemotes) do
+                print("  - " .. r:GetFullName())
+            end
+        end
     end
 end)
 
+-- Loop auto perfect
 task.spawn(function()
-    while task.wait(0.05) do
+    while task.wait(0.03) do
         if Config.AutoPerfectSkillCheck.Enabled then
+            -- Method 1: Fire semua remote
             for _, remote in pairs(repairRemotes) do
                 pcall(function()
                     if remote:IsA("RemoteEvent") then
@@ -812,26 +831,45 @@ task.spawn(function()
                         remote:FireServer(1)
                         remote:FireServer(100)
                         remote:FireServer("hit")
+                        remote:FireServer("complete")
                     elseif remote:IsA("RemoteFunction") then
                         pcall(function() remote:InvokeServer("perfect") end)
                         pcall(function() remote:InvokeServer(true) end)
                         pcall(function() remote:InvokeServer(1) end)
+                        pcall(function() remote:InvokeServer(100) end)
                     end
                 end)
             end
+            
+            -- Method 2: Auto klik semua button di GUI skill check
             for _, gui in pairs(skillCheckGuis) do
-                for _, btn in pairs(gui:GetDescendants()) do
-                    if btn:IsA("TextButton") or btn:IsA("ImageButton") then
-                        pcall(function() btn.MouseButton1Click:Fire() end)
-                        pcall(function() btn.MouseButton1Down:Fire() end)
-                        pcall(function() btn.Activated:Fire() end)
+                pcall(function()
+                    for _, btn in pairs(gui:GetDescendants()) do
+                        if btn:IsA("TextButton") or btn:IsA("ImageButton") then
+                            pcall(function() btn.MouseButton1Click:Fire() end)
+                            pcall(function() btn.MouseButton1Down:Fire() end)
+                            pcall(function() btn.Activated:Fire() end)
+                            pcall(function() btn:Activate() end)
+                        end
                     end
-                end
+                end)
             end
+            
+            -- Method 3: Simulate Space key + F key (kadang skill check pake ini)
+            pcall(function()
+                local VIM = game:GetService("VirtualInputManager")
+                VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                task.wait(0.01)
+                VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                task.wait(0.01)
+                VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+            end)
         end
     end
 end)
 
+-- No Skill Check (hide GUI)
 task.spawn(function()
     while task.wait(0.1) do
         if Config.NoSkillCheck.Enabled then
@@ -1219,7 +1257,7 @@ RunService.RenderStepped:Connect(function()
         end)
     end
 
-    -- GENERATOR ESP
+        -- GENERATOR ESP - BOX + PROGRESS BAR ONLY (No Text)
     if Config.ESP.GeneratorESP then
         local sortedGens = {}
         for i, gen in pairs(Generators) do
@@ -1234,33 +1272,78 @@ RunService.RenderStepped:Connect(function()
             pcall(function()
                 local gen = entry.Gen
                 local dist = entry.Dist
+                local obj = gen.Obj
                 local pos = gen.Position
-                if not genESPObjs[gen.Obj] then
-                    local tag = Drawing.new("Text")
-                    tag.Visible = false; tag.Size = 13; tag.Center = true
-                    tag.Outline = true; tag.Font = 2
-                    genESPObjs[gen.Obj] = { Tag = tag }
+                
+                -- Buat object ESP generator (box, progress bar bg, progress bar fill)
+                if not genESPObjs[obj] then
+                    local box = Drawing.new("Square")
+                    box.Visible = false; box.Thickness = 2; box.Filled = false
+                    box.Color = Color3.fromRGB(255, 220, 0)
+                    box.Transparency = 1
+                    
+                    local progBg = Drawing.new("Line")
+                    progBg.Visible = false; progBg.Thickness = 6
+                    progBg.Color = Color3.fromRGB(40, 40, 40)
+                    progBg.Transparency = 0.5
+                    
+                    local progFill = Drawing.new("Line")
+                    progFill.Visible = false; progFill.Thickness = 6
+                    progFill.Color = Color3.fromRGB(0, 255, 100)
+                    progFill.Transparency = 1
+                    
+                    genESPObjs[obj] = { Box = box, ProgBg = progBg, ProgFill = progFill }
                 end
+                
+                local o = genESPObjs[obj]
                 local sp, onScr = Camera:WorldToViewportPoint(pos)
-                local t = genESPObjs[gen.Obj]
-                if t and onScr and i <= Config.ESP.GeneratorMaxShow then
+                
+                if o and onScr and i <= Config.ESP.GeneratorMaxShow then
+                    -- Hitung size box berdasarkan jarak (perspektif)
+                    local size = math.clamp(300 / dist, 30, 200)
+                    
+                    -- BOX kuning
+                    o.Box.Size = Vector2.new(size, size)
+                    o.Box.Position = Vector2.new(sp.X - size/2, sp.Y - size/2)
+                    o.Box.Visible = true
+                    
+                    -- PROGRESS BAR di bawah box
                     local progress = getGeneratorProgress(gen)
-                    local repairing = getRepairingPlayers(gen)
-                    local progStr = progress and (progress .. "%") or "0%"
-                    local repairStr = ""
-                    if #repairing > 0 then
-                        repairStr = " | Misa P=" .. #repairing .. " (" .. table.concat(repairing, ", ") .. ")"
+                    local prog = progress or 0
+                    
+                    local barX = sp.X - size/2
+                    local barY = sp.Y + size/2 + 8
+                    local barWidth = size
+                    
+                    -- Background bar
+                    o.ProgBg.From = Vector2.new(barX, barY)
+                    o.ProgBg.To = Vector2.new(barX + barWidth, barY)
+                    o.ProgBg.Visible = true
+                    
+                    -- Fill bar (sesuai progress)
+                    o.ProgFill.From = Vector2.new(barX, barY)
+                    o.ProgFill.To = Vector2.new(barX + (barWidth * (prog/100)), barY)
+                    o.ProgFill.Visible = true
+                    
+                    -- Warna fill: merah (rendah) → kuning → hijau (penuh)
+                    if prog < 30 then
+                        o.ProgFill.Color = Color3.fromRGB(255, 60, 60)
+                    elseif prog < 70 then
+                        o.ProgFill.Color = Color3.fromRGB(255, 200, 0)
+                    else
+                        o.ProgFill.Color = Color3.fromRGB(0, 255, 100)
                     end
-                    t.Tag.Position = Vector2.new(sp.X, sp.Y)
-                    t.Tag.Text = "⚡ " .. gen.Name .. " [" .. math.floor(dist) .. "m] " .. progStr .. repairStr
-                    t.Tag.Color = Config.ESP.GeneratorColor
-                    t.Tag.Visible = true
-                elseif t then
-                    t.Tag.Visible = false
+                else
+                    if o then
+                        o.Box.Visible = false
+                        o.ProgBg.Visible = false
+                        o.ProgFill.Visible = false
+                    end
                 end
             end)
         end
 
+        -- Hide yang ga masuk list
         for obj, o in pairs(genESPObjs) do
             local found = false
             for _, entry in pairs(sortedGens) do
